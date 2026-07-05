@@ -1219,7 +1219,7 @@ function ensureCurveStrategyControls(){
   $('autoMode').closest('label').insertAdjacentHTML('afterend', `
     <label>控制策略<select id="curveControlMode">
       <option value="staged">先急速后安静</option>
-      <option value="fast">始终急速</option>
+      <option value="fast">急速直到安静时间</option>
       <option value="quiet">始终安静</option>
     </select></label>
     <label>切换安静时间<input id="quietSwitchMinute" type="time" step="300" value="00:30"></label>
@@ -5125,9 +5125,32 @@ float targetTempForSleepCurve(uint16_t elapsedMinute) {
 }
 
 String curveStageForElapsed(uint16_t elapsedMinute) {
-  if (config.curveControlMode == "fast") return "fast";
+  if (config.curveControlMode != "quiet" && elapsedMinute >= config.quietSwitchMinute) return "quiet";
   if (config.curveControlMode == "quiet") return "quiet";
-  return elapsedMinute < config.quietSwitchMinute ? "fast" : "quiet";
+  return "fast";
+}
+
+float temperatureDemand(float target, const String &mode) {
+  if (isnan(roomTempC)) return 0.0f;
+  if (mode == "heat") return target - roomTempC;
+  return roomTempC - target;
+}
+
+String fanForSleepDemand(float demand, bool quietStage, bool dehumidifying) {
+  if (quietStage) return "low";
+  float lowThreshold = max(config.deadband, 0.25f);
+  if (demand <= lowThreshold) return "low";
+  if (dehumidifying) return demand >= 1.0f ? "medium" : "low";
+  return demand >= 1.0f ? "high" : "medium";
+}
+
+bool turboForSleepDemand(float demand, bool quietStage, bool dehumidifying) {
+  if (quietStage || dehumidifying) return false;
+  return demand >= max(1.2f, config.deadband * 3.0f);
+}
+
+bool quietForSleepDemand(bool quietStage, bool curveActive) {
+  return quietStage || !curveActive;
 }
 
 float closedLoopSetpoint(float target, const String &mode, const String &stage = "quiet") {
@@ -5234,7 +5257,6 @@ void runAutoControl() {
                      ? clampFloat(targetTempForSleepCurve(elapsed), config.minSetpoint, config.maxSetpoint)
                      : clampFloat(config.humidityTargetTemp, config.minSetpoint, config.maxSetpoint);
   String stage = curveActive ? curveStageForElapsed(elapsed) : "humidity";
-  bool fast = curveActive && stage == "fast";
   bool humidityEnabledNow = curveActive ? config.curveHumidityEnabled : config.humidityControlEnabled;
   bool humidityHigh = humidityEnabledNow && !isnan(roomHumidity) &&
                       roomHumidity > config.targetHumidity + config.humidityDeadband;
@@ -5267,13 +5289,23 @@ void runAutoControl() {
     return;
   }
 
-  if (!shouldDehumidify && curveActive && tempInBand) {
-    addDecisionLog("skip_deadband", stage.c_str(), "室温已在死区内，曲线除湿未触发", roomTempC, target, NAN);
-    lastControlMs = millis();
-    return;
-  }
+  bool quietStage = curveActive ? stage == "quiet" : true;
+  float demand = temperatureDemand(target, shouldDehumidify ? "dry" : (curveActive ? config.autoMode : "auto"));
 
-  if (!shouldDehumidify) {
+  pendingAc.power = true;
+  pendingAc.mode = shouldDehumidify ? "dry" : (curveActive ? config.autoMode : "auto");
+  pendingAc.fan = curveActive
+                      ? fanForSleepDemand(demand, quietStage, shouldDehumidify)
+                      : (shouldDehumidify ? "low" : "auto");
+  pendingAc.turbo = curveActive ? turboForSleepDemand(demand, quietStage, shouldDehumidify) : false;
+  pendingAc.quiet = curveActive ? quietForSleepDemand(quietStage, true) : true;
+  pendingAc.sleep = false;
+  pendingAc.swingV = false;
+  pendingAc.swingH = false;
+  pendingAc.filter = false;
+  pendingAc.degrees = closedLoopSetpoint(target, config.autoMode, stage);
+
+  if (!shouldDehumidify && sameAutoRequestShape(pendingAc)) {
     String predictiveReason;
     if (shouldPredictiveSkip(target, &predictiveReason)) {
       addDecisionLog("skip_predict", stage.c_str(), predictiveReason.c_str(), roomTempC, target, NAN);
@@ -5283,16 +5315,6 @@ void runAutoControl() {
     }
   }
 
-  pendingAc.power = true;
-  pendingAc.mode = shouldDehumidify ? "dry" : (curveActive ? config.autoMode : "auto");
-  pendingAc.fan = shouldDehumidify ? (fast ? "medium" : "low") : (fast ? "high" : "low");
-  pendingAc.turbo = shouldDehumidify ? false : fast;
-  pendingAc.quiet = shouldDehumidify ? !fast : !fast;
-  pendingAc.sleep = false;
-  pendingAc.swingV = false;
-  pendingAc.swingH = false;
-  pendingAc.filter = false;
-  pendingAc.degrees = closedLoopSetpoint(target, config.autoMode, stage);
   updateAdaptiveRate(stage, target);
   if (config.adaptiveControlEnabled && millis() - lastAdaptiveSaveMs > 30UL * 60UL * 1000UL) {
     saveConfig();
@@ -5311,6 +5333,9 @@ void runAutoControl() {
   String note = shouldDehumidify
                     ? "已排队除湿：湿度 " + String(roomHumidity, 0) + "% / 目标 " + String(config.targetHumidity, 0) + "%"
                     : "已排队发送温度控制指令";
+  note += "，风速 " + pendingAc.fan + (pendingAc.quiet ? " / 静音" : "") +
+          (pendingAc.turbo ? " / 强劲" : "") +
+          "，温差 " + String(demand, 1) + "℃";
   addDecisionLog(shouldDehumidify ? "queue_dehumidify" : "queue_send", stage.c_str(), note.c_str(), roomTempC, target, pendingAc.degrees);
   lastAutoSentSetpoint = pendingAc.degrees;
   rememberAutoRequestShape(pendingAc);
@@ -5415,15 +5440,16 @@ void addLiveToJson(JsonDocument &doc) {
   if (curveActive) {
     float target = clampFloat(targetTempForSleepCurve(elapsed), config.minSetpoint, config.maxSetpoint);
     String stage = curveStageForElapsed(elapsed);
-    bool fast = stage == "fast";
+    bool quietStage = stage == "quiet";
+    float demand = temperatureDemand(target, config.autoMode);
     autoTarget["elapsedMinute"] = elapsed;
     autoTarget["temperatureC"] = target;
     autoTarget["setpointC"] = closedLoopSetpoint(target, config.autoMode, stage);
     autoTarget["roomErrorC"] = isnan(roomTempC) ? 0 : roomTempC - target;
     autoTarget["stage"] = stage;
-    autoTarget["fan"] = fast ? "high" : "low";
-    autoTarget["turbo"] = fast;
-    autoTarget["quiet"] = !fast;
+    autoTarget["fan"] = fanForSleepDemand(demand, quietStage, false);
+    autoTarget["turbo"] = turboForSleepDemand(demand, quietStage, false);
+    autoTarget["quiet"] = quietForSleepDemand(quietStage, true);
     autoTarget["sleep"] = false;
   } else if (config.humidityControlEnabled) {
     float target = clampFloat(config.humidityTargetTemp, config.minSetpoint, config.maxSetpoint);
