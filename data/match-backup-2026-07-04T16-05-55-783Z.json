@@ -1,0 +1,1241 @@
+{
+  "exportedAt": "2026-07-04T16:05:55.783Z",
+  "source": "http://192.168.31.162/match",
+  "protocol": "协议 MIRAGE / 型号 2",
+  "countText": "205 / 425",
+  "lastMatch": "匹配 cool · 16.0 · auto",
+  "totalCards": 425,
+  "matchedCount": 205,
+  "matched": [
+    {
+      "code": "编码 0x1A032400006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: 01:00, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 16.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x1A032600006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 16C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: 01:00, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 16.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x42012302006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 16C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 16.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x42012102006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 16C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 16.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 17C, Fan: 0 (Auto), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 17.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x42012202006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 17C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 17.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x42012302006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 17C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 17.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x42012102006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 17C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 17.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 18C, Fan: 0 (Auto), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 18.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 18C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 18.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 18C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 18.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 18C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 18.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 19C, Fan: 0 (Auto), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 19.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 19C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 19.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 19C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 19.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 19C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 19.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 20C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 20.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 20C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 20.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 20C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 20.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 20C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 20.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 21C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 21.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 21C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 21.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 21C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 21.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 21C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 21.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 22C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 22.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 22C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 22.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 22C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 22.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 22C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 22.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 23C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 23.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 23C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 23.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 23C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 23.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 23C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 23.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 24C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 24.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 24C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 24.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 24C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 24.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 24C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 24.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 25C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 25.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 25C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 25.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 25C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 25.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 25C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 25.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 26C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 26.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 26C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 26.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 26C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 26.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 26C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 26.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 27C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 27.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 27C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 27.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 27C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 27.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 27C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 27.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 28C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 28.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 28C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 28.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 28C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 28.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 28C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 28.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 29C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 29.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 29C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 29.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 29C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 29.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 29C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 29.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 30C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 30.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 30C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 30.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 30C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 30.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 30C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 30.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2012000007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 31C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 31.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x32201007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 31C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: On, Light: -, Swing(V): On, Swing(H): On, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 31.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 31C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 31.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 31C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 31.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x32000007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 32C, Fan: 0 (Auto), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): On, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 32.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2012200007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 32C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 32.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2012300007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 32C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 32.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2012100007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 2 (Cool), Temp: 32C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制冷 · 32.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 16.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 16C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 16.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 16C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 16.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 16C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 16.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 17C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 17.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 17C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 17.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 17C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 17.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 17C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 17.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 18C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 18.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 18C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 18.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 18C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 18.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 18C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 18.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 19C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 19.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 19C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 19.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 19C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 19.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 19C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 19.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 20C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 20.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 20C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 20.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 20C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 20.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 20C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 20.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 21C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 21.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 21C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 21.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 21C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 21.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 21C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 21.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x42033002007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 22C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 22.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x42033203007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 22C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: On, Light: -, Swing(V): On, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 22.0℃ · 低风"
+    },
+    {
+      "code": "编码 0xC03300007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: Off, Mode: 3 (Dry), Temp: 22C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 22.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x10013500007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 22C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: Off, Clean: -, On Timer: Off, Off Timer: 01:00, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 22.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x42033002007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 23C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 23.0℃ · 自动"
+    },
+    {
+      "code": "编码 0xA013200007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 23C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 23.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 23C, Fan: 3 (Medium), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 23.0℃ · 中风"
+    },
+    {
+      "code": "编码 0xA063102007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 23C, Fan: 1 (High), Turbo: Off, Sleep: On, Quiet: Off, Light: Toggle, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 23.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x42013002007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 24C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 24.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x42013202007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 24C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 24.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x42033302007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 24C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 24.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x42013102007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 24C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 24.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 25C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 25.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x12023603007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 25C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: On, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: 04:00, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 25.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x42033302007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 25C, Fan: 3 (Medium), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 25.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 25C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 25.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 26C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 26.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 26C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 26.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 26C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 26.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 26C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 26.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 27C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 27.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x12013603007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 27C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: On, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: 02:00, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 27.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x12013702007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 27C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: 02:00, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 27.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 27C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 27.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 28C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 28.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 28C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 28.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 28C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 28.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 28C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 28.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 29C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 29.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 29C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 29.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 29C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 29.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 29C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 29.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 30C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 30.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 30C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 30.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 30C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 30.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 30C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 30.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 31C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 31.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 31C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 31.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 31C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 31.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 31C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 31.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x2013000007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 32C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 32.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x2013200007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 32C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 32.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x2013300007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 32C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 32.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x2013100007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 32C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "除湿 · 32.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 16.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 16.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 16.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100006C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 16.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 17C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 17.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 17C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 17.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 17C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 17.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100006D56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 17C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 17.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 18C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 18.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 18C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 18.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 18C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 18.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100006E56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 18C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 18.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 19C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 19.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 19C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 19.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 19C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 19.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100006F56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 19C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 19.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 20C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 20.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 20C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 20.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 20C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 20.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007056 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 20C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 20.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 21C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 21.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 21C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 21.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 21C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 21.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007156 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 21C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 21.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 22C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 22.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 22C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 22.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 22C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 22.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007256 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 22C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 22.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 23C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 23.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 23C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 23.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 23C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 23.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007356 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 23C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 23.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 24C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 24.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 24C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 24.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 24C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 24.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007456 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 24C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 24.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 25C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 25.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 25C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 25.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 25C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 25.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007556 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 25C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 25.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 26C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 26.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 26C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 26.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 26C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 26.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007656 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 26C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 26.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 27C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 27.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 27C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 27.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 27C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 27.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 27C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 27.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 28C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 28.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 28C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 28.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 28C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 28.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007856 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 28C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 28.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 29C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 29.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 29C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 29.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 29C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 29.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007956 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 29C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 29.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 30.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 30.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 30.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007A56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 30.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 31.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 31.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 31.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007B56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 31.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x40001000007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 32.0℃ · 自动"
+    },
+    {
+      "code": "编码 0x40001200007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 32.0℃ · 低风"
+    },
+    {
+      "code": "编码 0x40001300007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 32.0℃ · 中风"
+    },
+    {
+      "code": "编码 0x40001100007C56 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "status": "已匹配",
+      "title": "制热 · 32.0℃ · 高风"
+    },
+    {
+      "code": "编码 0x12005600007756 / 120 bits",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 5 (Fan), Temp: 27C, Fan: 2 (Low), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: 01:00, IFeel: Off",
+      "status": "已匹配",
+      "title": "送风 · 27.0℃ · 低风"
+    }
+  ]
+}

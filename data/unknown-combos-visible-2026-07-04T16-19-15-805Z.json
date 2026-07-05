@@ -1,0 +1,408 @@
+{
+  "cards": [
+    {
+      "count": "次数 1 · 2026/7/5 00:17:17",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 0 (Auto), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x2001002007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 32.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:17:14",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 0 (Auto), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x2021002007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 32.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:17:12",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 0 (Auto), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42021002007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 32.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:17:11",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x4A021202007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 32.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:17:10",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0xA021202007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 32.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:17:07",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: On, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x4A021203007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 32.0 · low"
+    },
+    {
+      "count": "次数 2 · 2026/7/5 00:17:09",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: On, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0xA021203007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 32.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:17:03",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x4A021002007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 32.0 · auto"
+    },
+    {
+      "count": "次数 2 · 2026/7/5 00:17:05",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0xA021002007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 32.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:59",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 32C, Fan: 1 (High), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x4A021102007C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 32.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 32.0 · high"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:56",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42021102007B56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 31.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 31.0 · high"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:52",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 1 (High), Turbo: Off, Sleep: On, Quiet: Off, Light: Toggle, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x4A061102007B56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 31.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 31.0 · high"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:45",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 1 (High), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: 01:00, IFeel: Off",
+      "meta": "MIRAGE / 0x5A021502007B56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 31.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 31.0 · high"
+    },
+    {
+      "count": "次数 2 · 2026/7/5 00:16:57",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 1 (High), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x4A021102007B56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 31.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 31.0 · high"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:43",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 1 (High), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x48021102007B56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 31.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 31.0 · high"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:41",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 31C, Fan: 3 (Medium), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x40021302007B56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 31.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 31.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:40",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 3 (Medium), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x40021302007A56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 30.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 30.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:39",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 3 (Medium), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): On, Swing(H): On, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x40031302007A56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 30.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 30.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:35",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 3 (Medium), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x40011302007A56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 30.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 30.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:33",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 3 (Medium), Turbo: Off, Sleep: On, Quiet: Off, Light: Toggle, Swing(V): Off, Swing(H): On, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x48051302007A56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 30.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 30.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:32",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 3 (Medium), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x48011302007A56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 30.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 30.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:31",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 3 (Medium), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x4A011302007A56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 30.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 30.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:30",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 30C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011302007A56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 30.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 30.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:29",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 29C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011302007956 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 29.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 29.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:27",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 28C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011302007856 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 28.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 28.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:26",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 27C, Fan: 3 (Medium), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011302007756 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 27.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 27.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:25",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 27C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011202007756 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 27.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 27.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:24",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 27C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011002007756 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 27.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 27.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:22",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 26C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011002007656 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 26.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 26.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:21",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 25C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011002007556 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 25.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 25.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:20",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 24C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011002007456 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 24.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 24.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:15",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 20C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x8001000007056 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 20.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 20.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:09",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 19C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x8001000006F56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 19.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 19.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:08",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 19C, Fan: 1 (High), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x8001100006F56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 19.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 19.0 · high"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:06",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 18C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x1100006E56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 18.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 18.0 · high"
+    },
+    {
+      "count": "次数 2 · 2026/7/5 00:16:05",
+      "description": "Protocol  : UNKNOWN\nCode      : 0x169AB523 (244 Bits)",
+      "meta": "UNKNOWN / 0x169AB523 / 244 bits / Raw 487",
+      "parsed": "解析：--",
+      "reason": "协议不同：UNKNOWN"
+    },
+    {
+      "count": "次数 2 · 2026/7/5 00:16:07",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 18C, Fan: 1 (High), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x8001100006E56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 18.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 18.0 · high"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:01",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 17C, Fan: 1 (High), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x8001100006D56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 17.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 17.0 · high"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:16:00",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 17C, Fan: 3 (Medium), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x8001300006D56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 17.0℃ · medium",
+      "reason": "同一基础组合的新编码：heat · 17.0 · medium"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:59",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 17C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x8001200006D56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 17.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 17.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:58",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 17C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: On, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x8001201006D56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 17.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 17.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:51",
+      "description": "Model: 2 (KKG29AC1), Power: Off, Mode: 1 (Heat), Temp: 17C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0xC01200006D56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 17.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 17.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:45",
+      "description": "Model: 2 (KKG29AC1), Power: Off, Mode: 1 (Heat), Temp: 16C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0xC01200006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 16.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:44",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 15C, Fan: 0 (Auto), Turbo: On, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x2011002006B56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 15.0℃ · auto",
+      "reason": "矩阵没有这个组合：heat|15.0|auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:43",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 15C, Fan: 2 (Low), Turbo: Off, Sleep: Off, Quiet: On, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x2011203006B56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 15.0℃ · low",
+      "reason": "矩阵没有这个组合：heat|15.0|low"
+    },
+    {
+      "count": "次数 7 · 2026/7/5 00:16:19",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 15C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x42011002006B56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 15.0℃ · auto",
+      "reason": "矩阵没有这个组合：heat|15.0|auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:39",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: On, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x8001201006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 16.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:38",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 2 (Low), Turbo: Off, Sleep: On, Quiet: On, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x48001201006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · low",
+      "reason": "同一基础组合的新编码：heat · 16.0 · low"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:36",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): On, Swing(H): On, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x48031000006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 16.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:35",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x48011000006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 16.0 · auto"
+    },
+    {
+      "count": "次数 2 · 2026/7/5 00:15:37",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x48001000006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 16.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:25",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: Toggle, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: 02:00, IFeel: Off",
+      "meta": "MIRAGE / 0x58041400006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 16.0 · auto"
+    },
+    {
+      "count": "次数 2 · 2026/7/5 00:15:28",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: 05:00, IFeel: Off",
+      "meta": "MIRAGE / 0x58001400006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 16.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:18",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: On, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: On, Clean: -, On Timer: Off, Off Timer: 02:00, IFeel: Off",
+      "meta": "MIRAGE / 0x5A001400006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 16.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:15",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x50001400006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · auto",
+      "reason": "同一基础组合的新编码：heat · 16.0 · auto"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:08",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 1 (Heat), Temp: 16C, Fan: 1 (High), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): Off, Filter: Off, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x50001500006C56 / 120 bits / Raw 243",
+      "parsed": "解析：heat · 16.0℃ · high",
+      "reason": "同一基础组合的新编码：heat · 16.0 · high"
+    },
+    {
+      "count": "次数 1 · 2026/7/5 00:15:03",
+      "description": "Model: 2 (KKG29AC1), Power: On, Mode: 3 (Dry), Temp: 32C, Fan: 0 (Auto), Turbo: Off, Sleep: Off, Quiet: Off, Light: -, Swing(V): Off, Swing(H): On, Filter: On, Clean: -, On Timer: Off, Off Timer: Off, IFeel: Off",
+      "meta": "MIRAGE / 0x12013400007C56 / 120 bits / Raw 243",
+      "parsed": "解析：dry · 32.0℃ · auto",
+      "reason": "同一基础组合的新编码：dry · 32.0 · auto"
+    }
+  ],
+  "countBadge": "205 / 425",
+  "protocol": "协议 MIRAGE / 型号 2",
+  "title": "空调对码检查",
+  "unknownCardCount": 57,
+  "url": "http://192.168.31.162/match"
+}
