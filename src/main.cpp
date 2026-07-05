@@ -933,6 +933,21 @@ const char kIndexHtml[] PROGMEM = R"HTML(
         <label>滤网/出风口<select id="filterFlag"><option value="false">关</option><option value="true">开</option></select></label>
       </div>
     </div>
+    <div class="special-panel">
+      <div class="special-title">
+        <h3>湿度控制</h3>
+        <div class="label">独立湿度控制不受睡眠开始时间限制；睡眠曲线内的除湿使用同一目标湿度。</div>
+      </div>
+      <div class="form-grid">
+        <label>独立湿度控制<select id="humidityControlEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
+        <label>目标湿度 %<input id="targetHumidity" type="number" step="1" min="35" max="85" value="58"></label>
+        <label>湿度死区 %<input id="humidityDeadband" type="number" step="1" min="1" max="15" value="3"></label>
+        <label>湿控目标温度 ℃<input id="humidityTargetTemp" type="number" step="0.5" min="16" max="32" value="26"></label>
+      </div>
+      <div class="mini-actions">
+        <button class="secondary" type="button" onclick="saveSettings('湿度控制已保存')">保存湿度控制</button>
+      </div>
+    </div>
     <div class="actions">
       <button onclick="sendAc()">立即发送</button>
       <button class="secondary" onclick="saveAcConfig()">保存协议配置</button>
@@ -1063,10 +1078,6 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       </div>
       <h3>闭环增强</h3>
       <div class="form-grid">
-        <label>独立湿度控制<select id="humidityControlEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
-        <label>目标湿度 %<input id="targetHumidity" type="number" step="1" min="35" max="85" value="58"></label>
-        <label>湿度死区 %<input id="humidityDeadband" type="number" step="1" min="1" max="15" value="3"></label>
-        <label>湿控目标温度 ℃<input id="humidityTargetTemp" type="number" step="0.5" min="16" max="32" value="26"></label>
         <label>预测跳过<select id="predictiveSkipEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
         <label>自学习闭环<select id="adaptiveControlEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
         <label>急速增益<input id="closedLoopFastGain" type="number" step="0.1" min="0.5" max="5" value="2.6"></label>
@@ -2202,9 +2213,9 @@ function settingsPayload(){
     capFilter:$('capFilter').value === 'true'
   };
 }
-async function saveSettings(){
+async function saveSettings(okText='维护与闭环设置已保存'){
   try {
-    await post('/api/settings', settingsPayload(), '维护与闭环设置已保存', ['sensorTempOffset','sensorHumidityOffset','humidityControlEnabled','targetHumidity','humidityDeadband','humidityTargetTemp','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter']);
+    await post('/api/settings', settingsPayload(), okText, ['sensorTempOffset','sensorHumidityOffset','humidityControlEnabled','targetHumidity','humidityDeadband','humidityTargetTemp','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter']);
   } catch(e) { msg(e.message || '设置保存失败', true); }
 }
 function exportConfig(){
@@ -4711,7 +4722,11 @@ bool sendAcNow(const AcRequest &request, const char *source = "manual", const ch
     bool ok = ac.sendAc();
     irrecv.enableIRIn();
     irBusy = false;
-    lastActionResult = ok ? "sent AC " + typeToString(config.acProtocol) + " fan=" + normalized.fan +
+    lastActionResult = ok ? "sent AC " + typeToString(config.acProtocol) +
+                                " power=" + String(normalized.power ? "on" : "off") +
+                                " mode=" + normalized.mode +
+                                " temp=" + String(normalized.degrees, 1) +
+                                " fan=" + normalized.fan +
                                 " turbo=" + String(normalized.turbo ? "on" : "off") +
                                 " quiet=" + String(normalized.quiet ? "on" : "off") +
                                 " sleep=" + String(normalized.sleep ? "on" : "off") +
@@ -5737,9 +5752,28 @@ void applyConfigJson(JsonObject src) {
 void handleSettingsPost() {
   JsonDocument doc;
   if (!parseBody(doc)) return;
+  bool humidityFieldPresent = doc["humidityControlEnabled"].is<bool>();
+  bool wasHumidityEnabled = config.humidityControlEnabled;
   JsonObject src = doc.as<JsonObject>();
   applyConfigJson(src);
   saveConfig();
+  if (humidityFieldPresent && wasHumidityEnabled && !config.humidityControlEnabled) {
+    pendingAc.power = false;
+    pendingAc.mode = config.remoteMode.length() ? config.remoteMode : "auto";
+    pendingAc.fan = "auto";
+    pendingAc.turbo = false;
+    pendingAc.quiet = false;
+    pendingAc.sleep = false;
+    pendingAc.swingV = false;
+    pendingAc.swingH = false;
+    pendingAc.filter = false;
+    pendingAc.degrees = clampFloat(isnan(lastSentSetpoint) ? config.remoteDegrees : lastSentSetpoint,
+                                   config.minSetpoint,
+                                   config.maxSetpoint);
+    setPendingAcContext("humidity", "off", NAN, pendingAc.degrees);
+    pendingAction = PendingAction::SendAc;
+    addDecisionLog("humidity_off", "humidity", "独立湿度控制关闭，已排队发送关机指令", roomTempC, NAN, pendingAc.degrees);
+  }
   sendOk("settings saved");
 }
 
