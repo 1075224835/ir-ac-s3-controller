@@ -5632,6 +5632,9 @@ void handleCurvePost() {
   config.autoMode = doc["autoMode"] | config.autoMode;
   config.curveControlMode = doc["curveControlMode"] | config.curveControlMode;
   config.curveEndAction = doc["curveEndAction"] | config.curveEndAction;
+  if (doc["curveHumidityEnabled"].is<bool>()) {
+    config.curveHumidityEnabled = doc["curveHumidityEnabled"] | config.curveHumidityEnabled;
+  }
   config.quietSwitchMinute = doc["quietSwitchMinute"] | config.quietSwitchMinute;
   normalizeCurveControlConfig();
   config.sleepStartMinute = (doc["sleepStartMinute"] | config.sleepStartMinute) % 1440;
