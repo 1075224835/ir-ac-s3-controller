@@ -55,6 +55,11 @@ struct DeviceConfig {
   float maxSetpoint = 32.0f;
   float sensorTempOffset = 0.0f;
   float sensorHumidityOffset = 0.0f;
+  bool humidityControlEnabled = false;
+  bool curveHumidityEnabled = false;
+  float targetHumidity = 58.0f;
+  float humidityDeadband = 3.0f;
+  float humidityTargetTemp = 26.0f;
   bool predictiveSkipEnabled = true;
   bool adaptiveControlEnabled = false;
   float learnedFastRate = 0.0f;
@@ -225,6 +230,11 @@ bool irBusy = false;
 String lastActionResult = "boot";
 float lastSentSetpoint = NAN;
 float lastAutoSentSetpoint = NAN;
+String lastAutoSentMode = "";
+String lastAutoSentFan = "";
+bool lastAutoSentTurbo = false;
+bool lastAutoSentQuiet = false;
+bool lastAutoSentSleep = false;
 char pendingAcSource[12] = "manual";
 char pendingAcAction[16] = "send";
 float pendingAcTarget = NAN;
@@ -985,6 +995,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     <div class="form-grid">
       <label>自动控制<select id="autoEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
       <label>自动模式<select id="autoMode"><option value="cool">制冷</option><option value="auto">自动</option><option value="dry">除湿</option><option value="heat">制热</option><option value="fan">送风</option></select></label>
+      <label>曲线除湿<select id="curveHumidityEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
       <label>开始时间 HH:MM<input id="sleepStart" value="23:00" inputmode="numeric"></label>
       <label>持续分钟<input id="sleepDuration" type="number" value="480"></label>
       <label>控制间隔秒<input id="controlInterval" type="number" min="5" value="600"></label>
@@ -1052,6 +1063,10 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       </div>
       <h3>闭环增强</h3>
       <div class="form-grid">
+        <label>独立湿度控制<select id="humidityControlEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
+        <label>目标湿度 %<input id="targetHumidity" type="number" step="1" min="35" max="85" value="58"></label>
+        <label>湿度死区 %<input id="humidityDeadband" type="number" step="1" min="1" max="15" value="3"></label>
+        <label>湿控目标温度 ℃<input id="humidityTargetTemp" type="number" step="0.5" min="16" max="32" value="26"></label>
         <label>预测跳过<select id="predictiveSkipEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
         <label>自学习闭环<select id="adaptiveControlEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
         <label>急速增益<input id="closedLoopFastGain" type="number" step="0.1" min="0.5" max="5" value="2.6"></label>
@@ -1113,7 +1128,7 @@ let refreshInFlight = false;
 let liveRefreshInFlight = false;
 const $ = id => document.getElementById(id);
 const dirty = new Set();
-const guardedIds = ['staSsid','staPassword','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan','autoEnabled','autoMode','curveControlMode','curveEndAction','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve','sensorTempOffset','sensorHumidityOffset','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'];
+const guardedIds = ['staSsid','staPassword','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan','autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve','sensorTempOffset','sensorHumidityOffset','humidityControlEnabled','targetHumidity','humidityDeadband','humidityTargetTemp','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'];
 const curveView = {w:720, h:280, l:44, r:14, t:10, b:30};
 const historyView = {w:720, h:260, l:50, r:18, t:18, b:38};
 let tempHistoryRefreshInFlight = false;
@@ -1159,8 +1174,8 @@ function ensureCurveStrategyControls(){
 const segmentedSelectIds = [
   'power','mode','fan','specialMode','swingV','swingH','filterFlag',
   'learnPower','learnMode','learnFan',
-  'autoEnabled','autoMode','curveControlMode','curveEndAction',
-  'predictiveSkipEnabled','adaptiveControlEnabled','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'
+  'autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled',
+  'humidityControlEnabled','predictiveSkipEnabled','adaptiveControlEnabled','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'
 ];
 function syncSegmentedControl(id){
   const select = $(id);
@@ -1918,7 +1933,7 @@ function bindCurveEditor(){
   });
   $('sleepStart').addEventListener('input', () => { renderCurve(); scheduleCurveAutoSave(); });
   $('quietSwitchMinute').addEventListener('input', () => { renderCurve(); scheduleCurveAutoSave(); });
-  ['autoEnabled','autoMode','curveControlMode','curveEndAction','controlInterval','deadband','autoSendDelta'].forEach(id => {
+  ['autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','controlInterval','deadband','autoSendDelta'].forEach(id => {
     const el = $(id);
     if (el) el.addEventListener('input', () => scheduleCurveAutoSave());
   });
@@ -2171,6 +2186,10 @@ function settingsPayload(){
   return {
     sensorTempOffset:Number($('sensorTempOffset').value || 0),
     sensorHumidityOffset:Number($('sensorHumidityOffset').value || 0),
+    humidityControlEnabled:$('humidityControlEnabled').value === 'true',
+    targetHumidity:Number($('targetHumidity').value || 58),
+    humidityDeadband:Number($('humidityDeadband').value || 3),
+    humidityTargetTemp:Number($('humidityTargetTemp').value || 26),
     predictiveSkipEnabled:$('predictiveSkipEnabled').value === 'true',
     adaptiveControlEnabled:$('adaptiveControlEnabled').value === 'true',
     closedLoopFastGain:Number($('closedLoopFastGain').value || 2.6),
@@ -2185,7 +2204,7 @@ function settingsPayload(){
 }
 async function saveSettings(){
   try {
-    await post('/api/settings', settingsPayload(), '维护与闭环设置已保存', ['sensorTempOffset','sensorHumidityOffset','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter']);
+    await post('/api/settings', settingsPayload(), '维护与闭环设置已保存', ['sensorTempOffset','sensorHumidityOffset','humidityControlEnabled','targetHumidity','humidityDeadband','humidityTargetTemp','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter']);
   } catch(e) { msg(e.message || '设置保存失败', true); }
 }
 function exportConfig(){
@@ -2286,8 +2305,12 @@ function applyLive(data){
   if (data.autoTarget) {
     const mode = modeText[data.autoTarget.mode] || data.autoTarget.mode || '--';
     const room = Number.isFinite(data.temperatureC) ? `${Number(data.temperatureC).toFixed(1)} ℃` : '--';
+    const humidityPart = data.autoTarget.humidityActive && Number.isFinite(Number(data.humidity))
+      ? ` · 湿度 ${Number(data.humidity).toFixed(0)}% / 目标 ${Number(data.autoTarget.targetHumidity).toFixed(0)}%`
+      : '';
+    const elapsedPart = data.autoTarget.curveActive ? ` / +${data.autoTarget.elapsedMinute} 分` : ' / 湿度控制';
     $('curveTargetBadge').textContent = data.autoTarget.active
-      ? `室温 ${room} · 目标 ${Number(data.autoTarget.temperatureC).toFixed(1)} ℃ · 设定 ${Number(data.autoTarget.setpointC).toFixed(1)} ℃ / ${mode} / +${data.autoTarget.elapsedMinute} 分`
+      ? `室温 ${room} · 目标 ${Number(data.autoTarget.temperatureC).toFixed(1)} ℃ · 设定 ${Number(data.autoTarget.setpointC).toFixed(1)} ℃ / ${mode}${humidityPart}${elapsedPart}`
       : '目标 -- / 曲线未生效';
   }
   $('captureBadge').textContent = data.capture && data.capture.available ? '已捕获' : '等待信号';
@@ -2334,6 +2357,7 @@ async function refresh(force=false){
     setValue('autoMode', state.config.autoMode || 'cool', force);
     setValue('curveControlMode', state.config.curveControlMode || 'staged', force);
     setValue('curveEndAction', state.config.curveEndAction || 'hold', force);
+    setValue('curveHumidityEnabled', String(!!state.config.curveHumidityEnabled), force);
     setValue('sleepStart', minToHhmm(state.config.sleepStartMinute), force);
     setValue('quietSwitchMinute', minToHhmm(Number(state.config.sleepStartMinute || 0) + Number(state.config.quietSwitchMinute ?? 90)), force);
     setValue('sleepDuration', minToHhmm(Number(state.config.sleepStartMinute || 0) + Number(state.config.sleepDurationMinute || 480)), force);
@@ -2342,6 +2366,10 @@ async function refresh(force=false){
     setValue('autoSendDelta', state.config.autoSendDelta ?? 0.5, force);
     setValue('sensorTempOffset', state.config.sensorTempOffset ?? 0, force);
     setValue('sensorHumidityOffset', state.config.sensorHumidityOffset ?? 0, force);
+    setValue('humidityControlEnabled', String(!!state.config.humidityControlEnabled), force);
+    setValue('targetHumidity', state.config.targetHumidity ?? 58, force);
+    setValue('humidityDeadband', state.config.humidityDeadband ?? 3, force);
+    setValue('humidityTargetTemp', state.config.humidityTargetTemp ?? 26, force);
     setValue('predictiveSkipEnabled', String(state.config.predictiveSkipEnabled !== false), force);
     setValue('adaptiveControlEnabled', String(!!state.config.adaptiveControlEnabled), force);
     setValue('closedLoopFastGain', state.config.closedLoopFastGain ?? 2.6, force);
@@ -2480,6 +2508,7 @@ async function saveCurve(auto=false){
       autoMode:$('autoMode').value,
       curveControlMode:$('curveControlMode').value,
       curveEndAction:$('curveEndAction').value,
+      curveHumidityEnabled:$('curveHumidityEnabled').value === 'true',
       quietSwitchMinute:quietSwitchFromTimes(),
       sleepStartMinute:hhmmToMin($('sleepStart').value),
       sleepDurationMinute:curveDurationFromTimes(),
@@ -2490,7 +2519,7 @@ async function saveCurve(auto=false){
     })});
     const t = await r.text();
     if (!r.ok) throw new Error(t || '保存失败');
-    clearDirty(['autoEnabled','autoMode','curveControlMode','curveEndAction','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve']);
+    clearDirty(['autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve']);
     msg(auto ? '睡眠曲线已自动保存' : '睡眠曲线已保存');
   } catch(e) {
     msg(e.message || '曲线 JSON 无效', true);
@@ -3755,6 +3784,9 @@ void normalizeCurveControlConfig() {
 void normalizeTuningConfig() {
   config.sensorTempOffset = clampFloat(config.sensorTempOffset, -5.0f, 5.0f);
   config.sensorHumidityOffset = clampFloat(config.sensorHumidityOffset, -20.0f, 20.0f);
+  config.targetHumidity = clampFloat(config.targetHumidity, 35.0f, 85.0f);
+  config.humidityDeadband = clampFloat(config.humidityDeadband, 1.0f, 15.0f);
+  config.humidityTargetTemp = clampFloat(config.humidityTargetTemp, config.minSetpoint, config.maxSetpoint);
   config.learnedFastRate = clampFloat(config.learnedFastRate, 0.0f, 2.0f);
   config.learnedQuietRate = clampFloat(config.learnedQuietRate, 0.0f, 2.0f);
   config.closedLoopFastGain = clampFloat(config.closedLoopFastGain, 0.5f, 5.0f);
@@ -3885,6 +3917,7 @@ void maintainTempHistoryPersistence() {
 }
 
 void saveConfig() {
+  normalizeTuningConfig();
   normalizeConfigRemoteState();
   JsonDocument doc;
   doc["staSsid"] = config.staSsid;
@@ -3915,6 +3948,11 @@ void saveConfig() {
   doc["maxSetpoint"] = config.maxSetpoint;
   doc["sensorTempOffset"] = config.sensorTempOffset;
   doc["sensorHumidityOffset"] = config.sensorHumidityOffset;
+  doc["humidityControlEnabled"] = config.humidityControlEnabled;
+  doc["curveHumidityEnabled"] = config.curveHumidityEnabled;
+  doc["targetHumidity"] = config.targetHumidity;
+  doc["humidityDeadband"] = config.humidityDeadband;
+  doc["humidityTargetTemp"] = config.humidityTargetTemp;
   doc["predictiveSkipEnabled"] = config.predictiveSkipEnabled;
   doc["adaptiveControlEnabled"] = config.adaptiveControlEnabled;
   doc["learnedFastRate"] = config.learnedFastRate;
@@ -3972,6 +4010,11 @@ void loadConfig() {
   config.maxSetpoint = 32.0f;
   config.sensorTempOffset = doc["sensorTempOffset"] | config.sensorTempOffset;
   config.sensorHumidityOffset = doc["sensorHumidityOffset"] | config.sensorHumidityOffset;
+  config.humidityControlEnabled = doc["humidityControlEnabled"] | config.humidityControlEnabled;
+  config.curveHumidityEnabled = doc["curveHumidityEnabled"] | config.curveHumidityEnabled;
+  config.targetHumidity = doc["targetHumidity"] | config.targetHumidity;
+  config.humidityDeadband = doc["humidityDeadband"] | config.humidityDeadband;
+  config.humidityTargetTemp = doc["humidityTargetTemp"] | config.humidityTargetTemp;
   config.predictiveSkipEnabled = doc["predictiveSkipEnabled"] | config.predictiveSkipEnabled;
   config.adaptiveControlEnabled = doc["adaptiveControlEnabled"] | config.adaptiveControlEnabled;
   config.learnedFastRate = doc["learnedFastRate"] | config.learnedFastRate;
@@ -4813,10 +4856,36 @@ bool sleepCurveIsActive(uint16_t nowMinute, uint16_t *elapsedOut) {
   return false;
 }
 
+void resetAutoSendMemory() {
+  lastAutoSentSetpoint = NAN;
+  lastAutoSentMode = "";
+  lastAutoSentFan = "";
+  lastAutoSentTurbo = false;
+  lastAutoSentQuiet = false;
+  lastAutoSentSleep = false;
+}
+
+bool sameAutoRequestShape(const AcRequest &request) {
+  return request.mode == lastAutoSentMode &&
+         request.fan == lastAutoSentFan &&
+         request.turbo == lastAutoSentTurbo &&
+         request.quiet == lastAutoSentQuiet &&
+         request.sleep == lastAutoSentSleep;
+}
+
+void rememberAutoRequestShape(const AcRequest &request) {
+  lastAutoSentMode = request.mode;
+  lastAutoSentFan = request.fan;
+  lastAutoSentTurbo = request.turbo;
+  lastAutoSentQuiet = request.quiet;
+  lastAutoSentSleep = request.sleep;
+}
+
 void runAutoControl() {
-  if (!config.autoEnabled) {
+  bool anyAutomaticEnabled = config.autoEnabled || config.humidityControlEnabled;
+  if (!anyAutomaticEnabled) {
     sleepCurveWasActive = false;
-    lastAutoSentSetpoint = NAN;
+    resetAutoSendMemory();
     return;
   }
   if (pendingAction != PendingAction::None) return;
@@ -4824,8 +4893,8 @@ void runAutoControl() {
   uint16_t nowMinute = 0;
   getLocalMinuteOfDay(&nowMinute);
   uint16_t elapsed = 0;
-  bool active = sleepCurveIsActive(nowMinute, &elapsed);
-  if (!active) {
+  bool curveActive = config.autoEnabled && sleepCurveIsActive(nowMinute, &elapsed);
+  if (!curveActive) {
     if (sleepCurveWasActive && config.curveEndAction == "poweroff") {
       pendingAc.power = false;
       pendingAc.mode = config.autoMode;
@@ -4840,43 +4909,83 @@ void runAutoControl() {
       setPendingAcContext("auto", "end_poweroff", NAN, pendingAc.degrees);
       pendingAction = PendingAction::SendAc;
       addDecisionLog("end_poweroff", "end", "曲线结束，按设置关机", roomTempC, NAN, pendingAc.degrees);
-      lastAutoSentSetpoint = NAN;
+      resetAutoSendMemory();
       lastControlMs = millis();
+      sleepCurveWasActive = false;
+      return;
     } else if (sleepCurveWasActive) {
       addDecisionLog("end_hold", "end", "曲线结束，保持当前空调状态，不发射红外", roomTempC, NAN, NAN);
     }
     sleepCurveWasActive = false;
-    return;
+    if (!config.humidityControlEnabled) return;
+  } else {
+    sleepCurveWasActive = true;
   }
-  sleepCurveWasActive = true;
 
   if (isnan(roomTempC)) {
-    addDecisionLog("skip_sensor", "active", "等待 SHT31 室温读数", roomTempC, NAN, NAN);
+    addDecisionLog("skip_sensor", curveActive ? "curve" : "humidity", "等待 SHT31 室温读数", roomTempC, NAN, NAN);
     return;
   }
   if (millis() - lastControlMs < static_cast<uint32_t>(config.controlIntervalSec) * 1000UL) return;
 
-  float target = clampFloat(targetTempForSleepCurve(elapsed), config.minSetpoint, config.maxSetpoint);
-  String stage = curveStageForElapsed(elapsed);
-  if (fabs(roomTempC - target) < config.deadband) {
-    addDecisionLog("skip_deadband", stage.c_str(), "室温已在死区内", roomTempC, target, NAN);
+  float target = curveActive
+                     ? clampFloat(targetTempForSleepCurve(elapsed), config.minSetpoint, config.maxSetpoint)
+                     : clampFloat(config.humidityTargetTemp, config.minSetpoint, config.maxSetpoint);
+  String stage = curveActive ? curveStageForElapsed(elapsed) : "humidity";
+  bool fast = curveActive && stage == "fast";
+  bool humidityEnabledNow = curveActive ? config.curveHumidityEnabled : config.humidityControlEnabled;
+  bool humidityHigh = humidityEnabledNow && !isnan(roomHumidity) &&
+                      roomHumidity > config.targetHumidity + config.humidityDeadband;
+  bool humidityStable = humidityEnabledNow && !isnan(roomHumidity) &&
+                        roomHumidity <= config.targetHumidity;
+  bool tempTooLowForDry = humidityHigh && roomTempC < target - max(0.5f, config.deadband);
+  bool tempInBand = fabs(roomTempC - target) < config.deadband;
+
+  if (humidityEnabledNow && isnan(roomHumidity)) {
+    addDecisionLog("skip_humidity_sensor", stage.c_str(), "等待 SHT31 湿度读数", roomTempC, target, NAN);
     lastControlMs = millis();
     return;
   }
-  String predictiveReason;
-  if (shouldPredictiveSkip(target, &predictiveReason)) {
-    addDecisionLog("skip_predict", stage.c_str(), predictiveReason.c_str(), roomTempC, target, NAN);
-    lastActionResult = "auto skipped predictive";
+
+  if (humidityEnabledNow && humidityHigh && tempTooLowForDry) {
+    String note = "湿度 " + String(roomHumidity, 0) + "% 高于目标，但室温低于目标，暂停除湿避免过冷";
+    addDecisionLog("skip_dehumidify_cold", stage.c_str(), note.c_str(), roomTempC, target, NAN);
     lastControlMs = millis();
     return;
   }
-  bool fast = stage == "fast";
+
+  bool shouldDehumidify = humidityHigh && !tempTooLowForDry;
+  bool shouldTemperatureControl = curveActive || (config.humidityControlEnabled && !curveActive && !tempInBand);
+  if (!shouldDehumidify && !shouldTemperatureControl) {
+    String note = humidityEnabledNow
+                      ? "温湿度已稳定：湿度 " + String(roomHumidity, 0) + "% / 目标 " + String(config.targetHumidity, 0) + "%"
+                      : "室温已在死区内";
+    addDecisionLog(humidityStable ? "skip_humidity_ok" : "skip_deadband", stage.c_str(), note.c_str(), roomTempC, target, NAN);
+    lastControlMs = millis();
+    return;
+  }
+
+  if (!shouldDehumidify && curveActive && tempInBand) {
+    addDecisionLog("skip_deadband", stage.c_str(), "室温已在死区内，曲线除湿未触发", roomTempC, target, NAN);
+    lastControlMs = millis();
+    return;
+  }
+
+  if (!shouldDehumidify) {
+    String predictiveReason;
+    if (shouldPredictiveSkip(target, &predictiveReason)) {
+      addDecisionLog("skip_predict", stage.c_str(), predictiveReason.c_str(), roomTempC, target, NAN);
+      lastActionResult = "auto skipped predictive";
+      lastControlMs = millis();
+      return;
+    }
+  }
 
   pendingAc.power = true;
-  pendingAc.mode = config.autoMode;
-  pendingAc.fan = fast ? "high" : "low";
-  pendingAc.turbo = fast;
-  pendingAc.quiet = !fast;
+  pendingAc.mode = shouldDehumidify ? "dry" : (curveActive ? config.autoMode : "auto");
+  pendingAc.fan = shouldDehumidify ? (fast ? "medium" : "low") : (fast ? "high" : "low");
+  pendingAc.turbo = shouldDehumidify ? false : fast;
+  pendingAc.quiet = shouldDehumidify ? !fast : !fast;
   pendingAc.sleep = false;
   pendingAc.swingV = false;
   pendingAc.swingH = false;
@@ -4887,17 +4996,22 @@ void runAutoControl() {
     saveConfig();
     lastAdaptiveSaveMs = millis();
   }
-  if (!isnan(lastAutoSentSetpoint) && fabs(pendingAc.degrees - lastAutoSentSetpoint) <= config.autoSendDelta) {
+  if (!isnan(lastAutoSentSetpoint) && sameAutoRequestShape(pendingAc) &&
+      fabs(pendingAc.degrees - lastAutoSentSetpoint) <= config.autoSendDelta) {
     lastActionResult = "auto skipped delta=" + String(fabs(pendingAc.degrees - lastAutoSentSetpoint), 1) +
                        "C threshold=" + String(config.autoSendDelta, 1) + "C";
-    addDecisionLog("skip_delta", stage.c_str(), "设定温度变化未超过发送过滤阈值", roomTempC, target, pendingAc.degrees);
+    addDecisionLog("skip_delta", stage.c_str(), "模式和设定温度变化未超过发送过滤阈值", roomTempC, target, pendingAc.degrees);
     lastControlMs = millis();
     return;
   }
-  setPendingAcContext("auto", "send", target, pendingAc.degrees);
+  setPendingAcContext(shouldDehumidify ? "humidity" : "auto", shouldDehumidify ? "dehumidify" : "send", target, pendingAc.degrees);
   pendingAction = PendingAction::SendAc;
-  addDecisionLog("queue_send", stage.c_str(), "已排队发送睡眠曲线控制指令", roomTempC, target, pendingAc.degrees);
+  String note = shouldDehumidify
+                    ? "已排队除湿：湿度 " + String(roomHumidity, 0) + "% / 目标 " + String(config.targetHumidity, 0) + "%"
+                    : "已排队发送温度控制指令";
+  addDecisionLog(shouldDehumidify ? "queue_dehumidify" : "queue_send", stage.c_str(), note.c_str(), roomTempC, target, pendingAc.degrees);
   lastAutoSentSetpoint = pendingAc.degrees;
+  rememberAutoRequestShape(pendingAc);
   lastControlMs = millis();
 }
 
@@ -4929,6 +5043,11 @@ void addConfigToJson(JsonObject obj) {
   obj["maxSetpoint"] = config.maxSetpoint;
   obj["sensorTempOffset"] = config.sensorTempOffset;
   obj["sensorHumidityOffset"] = config.sensorHumidityOffset;
+  obj["humidityControlEnabled"] = config.humidityControlEnabled;
+  obj["curveHumidityEnabled"] = config.curveHumidityEnabled;
+  obj["targetHumidity"] = config.targetHumidity;
+  obj["humidityDeadband"] = config.humidityDeadband;
+  obj["humidityTargetTemp"] = config.humidityTargetTemp;
   obj["predictiveSkipEnabled"] = config.predictiveSkipEnabled;
   obj["adaptiveControlEnabled"] = config.adaptiveControlEnabled;
   obj["learnedFastRate"] = config.learnedFastRate;
@@ -4980,9 +5099,17 @@ void addLiveToJson(JsonDocument &doc) {
   bool curveActive = config.autoEnabled && sleepCurveIsActive(minuteOfDay, &elapsed);
   JsonObject autoTarget = doc["autoTarget"].to<JsonObject>();
   autoTarget["enabled"] = config.autoEnabled;
-  autoTarget["active"] = curveActive;
+  autoTarget["active"] = curveActive || config.humidityControlEnabled;
+  autoTarget["curveActive"] = curveActive;
   autoTarget["mode"] = config.autoMode;
   autoTarget["endAction"] = config.curveEndAction;
+  autoTarget["humidityControlEnabled"] = config.humidityControlEnabled;
+  autoTarget["curveHumidityEnabled"] = config.curveHumidityEnabled;
+  autoTarget["humidityActive"] = curveActive ? config.curveHumidityEnabled : config.humidityControlEnabled;
+  autoTarget["targetHumidity"] = config.targetHumidity;
+  autoTarget["humidityDeadband"] = config.humidityDeadband;
+  if (isnan(roomHumidity)) autoTarget["humidityError"] = nullptr;
+  else autoTarget["humidityError"] = roomHumidity - config.targetHumidity;
   if (curveActive) {
     float target = clampFloat(targetTempForSleepCurve(elapsed), config.minSetpoint, config.maxSetpoint);
     String stage = curveStageForElapsed(elapsed);
@@ -4995,6 +5122,17 @@ void addLiveToJson(JsonDocument &doc) {
     autoTarget["fan"] = fast ? "high" : "low";
     autoTarget["turbo"] = fast;
     autoTarget["quiet"] = !fast;
+    autoTarget["sleep"] = false;
+  } else if (config.humidityControlEnabled) {
+    float target = clampFloat(config.humidityTargetTemp, config.minSetpoint, config.maxSetpoint);
+    autoTarget["elapsedMinute"] = nullptr;
+    autoTarget["temperatureC"] = target;
+    autoTarget["setpointC"] = closedLoopSetpoint(target, "auto", "humidity");
+    autoTarget["roomErrorC"] = isnan(roomTempC) ? 0 : roomTempC - target;
+    autoTarget["stage"] = "humidity";
+    autoTarget["fan"] = "low";
+    autoTarget["turbo"] = false;
+    autoTarget["quiet"] = true;
     autoTarget["sleep"] = false;
   } else {
     autoTarget["elapsedMinute"] = nullptr;
@@ -5555,6 +5693,11 @@ void applyConfigJson(JsonObject src) {
   }
   if (src["sensorTempOffset"].is<float>() || src["sensorTempOffset"].is<int>()) config.sensorTempOffset = src["sensorTempOffset"] | config.sensorTempOffset;
   if (src["sensorHumidityOffset"].is<float>() || src["sensorHumidityOffset"].is<int>()) config.sensorHumidityOffset = src["sensorHumidityOffset"] | config.sensorHumidityOffset;
+  if (src["humidityControlEnabled"].is<bool>()) config.humidityControlEnabled = src["humidityControlEnabled"] | config.humidityControlEnabled;
+  if (src["curveHumidityEnabled"].is<bool>()) config.curveHumidityEnabled = src["curveHumidityEnabled"] | config.curveHumidityEnabled;
+  if (src["targetHumidity"].is<float>() || src["targetHumidity"].is<int>()) config.targetHumidity = src["targetHumidity"] | config.targetHumidity;
+  if (src["humidityDeadband"].is<float>() || src["humidityDeadband"].is<int>()) config.humidityDeadband = src["humidityDeadband"] | config.humidityDeadband;
+  if (src["humidityTargetTemp"].is<float>() || src["humidityTargetTemp"].is<int>()) config.humidityTargetTemp = src["humidityTargetTemp"] | config.humidityTargetTemp;
   if (src["predictiveSkipEnabled"].is<bool>()) config.predictiveSkipEnabled = src["predictiveSkipEnabled"] | config.predictiveSkipEnabled;
   if (src["adaptiveControlEnabled"].is<bool>()) config.adaptiveControlEnabled = src["adaptiveControlEnabled"] | config.adaptiveControlEnabled;
   if (src["learnedFastRate"].is<float>() || src["learnedFastRate"].is<int>()) config.learnedFastRate = src["learnedFastRate"] | config.learnedFastRate;
