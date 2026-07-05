@@ -8,6 +8,7 @@
 #include <IRsend.h>
 #include <IRutils.h>
 #include <LittleFS.h>
+#include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <Wire.h>
@@ -52,6 +53,20 @@ struct DeviceConfig {
   float autoSendDelta = 0.5f;
   float minSetpoint = 16.0f;
   float maxSetpoint = 32.0f;
+  float sensorTempOffset = 0.0f;
+  float sensorHumidityOffset = 0.0f;
+  bool predictiveSkipEnabled = true;
+  bool adaptiveControlEnabled = false;
+  float learnedFastRate = 0.0f;
+  float learnedQuietRate = 0.0f;
+  float closedLoopFastGain = 2.6f;
+  float closedLoopQuietGain = 0.9f;
+  bool capTurbo = true;
+  bool capQuiet = true;
+  bool capSleep = true;
+  bool capSwingV = true;
+  bool capSwingH = true;
+  bool capFilter = true;
   uint8_t curveCount = 4;
   CurvePoint curve[kMaxCurvePoints] = {
       {0, 27.0f},
@@ -115,6 +130,31 @@ struct TempHistorySample {
   int16_t temp10 = 0;
 };
 
+struct ControlEvent {
+  uint32_t minute = 0;
+  int16_t room10 = INT16_MIN;
+  int16_t target10 = INT16_MIN;
+  int16_t setpoint10 = INT16_MIN;
+  char source[12] = "";
+  char action[16] = "";
+  char mode[8] = "";
+  char fan[8] = "";
+  bool power = true;
+  bool turbo = false;
+  bool quiet = false;
+  bool sleep = false;
+};
+
+struct DecisionLogEntry {
+  uint32_t minute = 0;
+  int16_t room10 = INT16_MIN;
+  int16_t target10 = INT16_MIN;
+  int16_t setpoint10 = INT16_MIN;
+  char action[16] = "";
+  char stage[8] = "";
+  char note[96] = "";
+};
+
 struct AcRequest {
   bool power = true;
   float degrees = 26.0f;
@@ -160,6 +200,16 @@ bool tempHistoryUsesEpoch = false;
 bool tempHistoryDirty = false;
 uint16_t unsavedTempHistorySamples = 0;
 uint32_t lastTempHistorySaveMs = 0;
+constexpr uint16_t kControlEventPoints = 160;
+constexpr char kControlEventsPath[] = "/control_events.csv";
+ControlEvent controlEvents[kControlEventPoints];
+uint16_t controlEventHead = 0;
+uint16_t controlEventCount = 0;
+bool controlEventsUseEpoch = false;
+constexpr uint8_t kDecisionLogPoints = 64;
+DecisionLogEntry decisionLog[kDecisionLogPoints];
+uint8_t decisionLogHead = 0;
+uint8_t decisionLogCount = 0;
 
 WebServer server(80);
 DNSServer dnsServer;
@@ -175,12 +225,17 @@ bool irBusy = false;
 String lastActionResult = "boot";
 float lastSentSetpoint = NAN;
 float lastAutoSentSetpoint = NAN;
+char pendingAcSource[12] = "manual";
+char pendingAcAction[16] = "send";
+float pendingAcTarget = NAN;
+float pendingAcSetpoint = NAN;
 uint32_t lastControlMs = 0;
 uint32_t lastWifiAttemptMs = 0;
 uint32_t wifiConnectStartMs = 0;
 bool ntpConfigured = false;
 bool apStarted = false;
 bool sleepCurveWasActive = false;
+uint32_t lastAdaptiveSaveMs = 0;
 
 const char kIndexHtml[] PROGMEM = R"HTML(
 <!doctype html>
@@ -582,6 +637,52 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       justify-content: space-between;
       gap: 10px;
     }
+    .sleep-presets, .mini-actions {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+      gap: 8px;
+      margin: 10px 0 0;
+    }
+    .sleep-presets button, .mini-actions button {
+      min-height: 38px;
+      padding: 7px 9px;
+      font-size: 13px;
+    }
+    .settings-panel {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 12px;
+    }
+    .control-log {
+      display: grid;
+      gap: 8px;
+      max-height: 280px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .log-item {
+      display: grid;
+      grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: var(--shadow-sm);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .log-item strong { color: var(--accent); }
+    .history-event-line { stroke: var(--warn); stroke-width: 1.2; stroke-dasharray: 3 4; pointer-events: none; }
+    .history-event-dot { fill: var(--warn); stroke: var(--panel-strong); stroke-width: 1.5; pointer-events: none; }
+    .segmented button:disabled {
+      opacity: .42;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
     .curve-editor {
       margin-top: 14px;
       border: 1px solid var(--line);
@@ -938,6 +1039,58 @@ const char kIndexHtml[] PROGMEM = R"HTML(
   <section>
     <div class="section-head">
       <div>
+        <h2>维护与闭环设置</h2>
+        <div class="subhead">校准自身传感器、设置库支持能力、调整闭环策略，并支持配置备份和浏览器 OTA。</div>
+      </div>
+      <div class="badge" id="settingsBadge">待保存</div>
+    </div>
+    <div class="settings-panel">
+      <h3>传感器校准</h3>
+      <div class="form-grid">
+        <label>室温修正 ℃<input id="sensorTempOffset" type="number" step="0.1" min="-5" max="5" value="0"></label>
+        <label>湿度修正 %<input id="sensorHumidityOffset" type="number" step="1" min="-20" max="20" value="0"></label>
+      </div>
+      <h3>闭环增强</h3>
+      <div class="form-grid">
+        <label>预测跳过<select id="predictiveSkipEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
+        <label>自学习闭环<select id="adaptiveControlEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
+        <label>急速增益<input id="closedLoopFastGain" type="number" step="0.1" min="0.5" max="5" value="2.6"></label>
+        <label>安静增益<input id="closedLoopQuietGain" type="number" step="0.1" min="0.2" max="3" value="0.9"></label>
+      </div>
+      <h3>空调库能力</h3>
+      <div class="form-grid">
+        <label>强劲<select id="capTurbo"><option value="true">支持</option><option value="false">不支持</option></select></label>
+        <label>静音<select id="capQuiet"><option value="true">支持</option><option value="false">不支持</option></select></label>
+        <label>睡眠<select id="capSleep"><option value="true">支持</option><option value="false">不支持</option></select></label>
+        <label>上下摆风<select id="capSwingV"><option value="true">支持</option><option value="false">不支持</option></select></label>
+        <label>左右摆风<select id="capSwingH"><option value="true">支持</option><option value="false">不支持</option></select></label>
+        <label>滤网/出风口<select id="capFilter"><option value="true">支持</option><option value="false">不支持</option></select></label>
+      </div>
+      <div class="mini-actions">
+        <button type="button" onclick="saveSettings()">保存设置</button>
+        <button class="secondary" type="button" onclick="exportConfig()">导出配置</button>
+        <button class="secondary" type="button" onclick="$('configImportFile').click()">导入配置</button>
+        <button class="secondary" type="button" onclick="$('otaFile').click()">OTA 升级</button>
+      </div>
+      <input id="configImportFile" type="file" accept="application/json,.json" style="display:none">
+      <input id="otaFile" type="file" accept=".bin,application/octet-stream" style="display:none">
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div>
+        <h2>自动控制决策日志</h2>
+        <div class="subhead">记录每一次曲线控制为什么发送、跳过或结束，便于夜间回归测试。</div>
+      </div>
+      <div class="header-links"><div class="badge" id="controlLogBadge">等待数据</div><button class="secondary" type="button" onclick="refreshControlLog()">刷新</button></div>
+    </div>
+    <div class="control-log" id="controlLog"><div class="empty">暂无决策日志</div></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div>
         <h2>WiFi 配网</h2>
         <div class="subhead">保存后设备会优先连接路由器；连接失败时保留热点模式。</div>
       </div>
@@ -960,11 +1113,12 @@ let refreshInFlight = false;
 let liveRefreshInFlight = false;
 const $ = id => document.getElementById(id);
 const dirty = new Set();
-const guardedIds = ['staSsid','staPassword','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan','autoEnabled','autoMode','curveControlMode','curveEndAction','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve'];
+const guardedIds = ['staSsid','staPassword','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan','autoEnabled','autoMode','curveControlMode','curveEndAction','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve','sensorTempOffset','sensorHumidityOffset','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'];
 const curveView = {w:720, h:280, l:44, r:14, t:10, b:30};
 const historyView = {w:720, h:260, l:50, r:18, t:18, b:38};
 let tempHistoryRefreshInFlight = false;
-const tempHistoryState = {samples:[], usesEpoch:false, start:null, end:null, minTemp:0, maxTemp:0, followLatest:true, hover:null};
+let controlLogRefreshInFlight = false;
+const tempHistoryState = {samples:[], events:[], usesEpoch:false, eventsUseEpoch:false, start:null, end:null, minTemp:0, maxTemp:0, followLatest:true, hover:null};
 const tempHistoryPinch = {active:false, startDistance:0, startSpan:0, anchor:0, ratio:0.5};
 const tempHistoryDrag = {active:false, pointerId:null, startClientX:0, startSvgX:0, startStart:0, startEnd:0, moved:false};
 let curveRenderRange = null;
@@ -1005,13 +1159,16 @@ function ensureCurveStrategyControls(){
 const segmentedSelectIds = [
   'power','mode','fan','specialMode','swingV','swingH','filterFlag',
   'learnPower','learnMode','learnFan',
-  'autoEnabled','autoMode','curveControlMode','curveEndAction'
+  'autoEnabled','autoMode','curveControlMode','curveEndAction',
+  'predictiveSkipEnabled','adaptiveControlEnabled','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'
 ];
 function syncSegmentedControl(id){
   const select = $(id);
   const group = document.querySelector(`[data-segmented-for="${id}"]`);
   if (!select || !group) return;
   group.querySelectorAll('button').forEach(btn => {
+    const opt = Array.from(select.options).find(option => option.value === btn.dataset.value);
+    btn.disabled = !!(select.disabled || opt?.disabled);
     btn.classList.toggle('selected', btn.dataset.value === select.value);
   });
 }
@@ -1177,6 +1334,12 @@ function renderTempHistory(data=null){
       .map(p => ({minute:Number(p.minute), temp:Number(p.temp)}))
       .filter(p => Number.isFinite(p.minute) && Number.isFinite(p.temp));
     tempHistoryState.usesEpoch = !!data.usesEpoch;
+    if (Array.isArray(data.events)) {
+      tempHistoryState.events = data.events
+        .map(e => ({minute:Number(e.minute), source:e.source, action:e.action, mode:e.mode, fan:e.fan, setpoint:Number(e.setpoint), target:Number(e.target), room:Number(e.room), power:!!e.power, turbo:!!e.turbo, quiet:!!e.quiet, sleep:!!e.sleep}))
+        .filter(e => Number.isFinite(e.minute));
+      tempHistoryState.eventsUseEpoch = !!data.eventsUseEpoch;
+    }
   }
   const samples = tempHistoryState.samples;
   if (!samples.length) {
@@ -1229,7 +1392,13 @@ function renderTempHistory(data=null){
   const lastNode = last.minute >= start && last.minute <= end
     ? `<circle cx="${historyX(last.minute,start,end).toFixed(1)}" cy="${historyY(last.temp,minTemp,maxTemp).toFixed(1)}" r="5" fill="var(--ok)"></circle>`
     : '';
-  svg.innerHTML = `${grid}<line class="curve-axis" x1="${historyView.l}" y1="${baseY}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.l}" y1="${historyView.t}" x2="${historyView.l}" y2="${baseY}"></line>${fill ? `<path class="history-fill" d="${fill}"></path><path class="history-line" d="${path}"></path>` : ''}${lastNode}${hover}`;
+  const eventMarkers = tempHistoryState.eventsUseEpoch === tempHistoryState.usesEpoch
+    ? tempHistoryState.events.filter(e => e.minute >= start && e.minute <= end).map(e => {
+      const x = historyX(e.minute, start, end).toFixed(1);
+      return `<line class="history-event-line" x1="${x}" y1="${historyView.t}" x2="${x}" y2="${baseY}"></line><circle class="history-event-dot" cx="${x}" cy="${historyView.t + 10}" r="4"></circle>`;
+    }).join('')
+    : '';
+  svg.innerHTML = `${grid}<line class="curve-axis" x1="${historyView.l}" y1="${baseY}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.l}" y1="${historyView.t}" x2="${historyView.l}" y2="${baseY}"></line>${fill ? `<path class="history-fill" d="${fill}"></path><path class="history-line" d="${path}"></path>` : ''}${eventMarkers}${lastNode}${hover}`;
   if ($('tempHistoryBadge')) $('tempHistoryBadge').textContent = `${samples.length} / 4320 点`;
   if ($('tempHistoryInfo')) {
     const spanHours = Math.max(1, Math.round((end - start) / 60));
@@ -1240,9 +1409,15 @@ async function refreshTempHistory(){
   if (tempHistoryRefreshInFlight || !$('tempHistorySvg')) return;
   tempHistoryRefreshInFlight = true;
   try {
-    const r = await fetch('/api/temp-history');
-    if (!r.ok) throw new Error(await r.text());
-    renderTempHistory(await r.json());
+    const [historyRes, eventsRes] = await Promise.all([fetch('/api/temp-history'), fetch('/api/control-events')]);
+    if (!historyRes.ok) throw new Error(await historyRes.text());
+    const history = await historyRes.json();
+    if (eventsRes.ok) {
+      const eventData = await eventsRes.json();
+      history.events = eventData.events || [];
+      history.eventsUseEpoch = !!eventData.usesEpoch;
+    }
+    renderTempHistory(history);
   } catch(e) {
     if ($('tempHistoryInfo')) $('tempHistoryInfo').textContent = e.message || '室温历史读取失败';
   } finally {
@@ -1267,6 +1442,28 @@ function historyPointFromClient(clientX, clientY=0){
 function historyPointFromEvent(evt){
   return historyPointFromClient(evt.clientX, evt.clientY);
 }
+function nearestHistoryEvent(minute){
+  if (tempHistoryState.eventsUseEpoch !== tempHistoryState.usesEpoch) return null;
+  const span = Math.max(1, (tempHistoryState.end || minute) - (tempHistoryState.start || minute));
+  const tolerance = Math.max(2, span / 120);
+  let best = null;
+  let bestDist = Infinity;
+  tempHistoryState.events.forEach(e => {
+    if (e.minute < tempHistoryState.start || e.minute > tempHistoryState.end) return;
+    const dist = Math.abs(e.minute - minute);
+    if (dist < bestDist) { bestDist = dist; best = e; }
+  });
+  return bestDist <= tolerance ? best : null;
+}
+function historyEventText(event){
+  if (!event) return '';
+  const sourceText = {auto:'曲线', manual:'手动', preset:'快捷', schedule:'定时'}[event.source] || event.source || '事件';
+  const actionText = {send:'发送', failed:'失败', end_poweroff:'结束关机'}[event.action] || event.action || '事件';
+  const setpoint = Number.isFinite(event.setpoint) ? ` · 设定 ${event.setpoint.toFixed(1)}℃` : '';
+  const mode = modeText[event.mode] || event.mode || '--';
+  const fan = fanText[event.fan] || event.fan || '--';
+  return `<span>${sourceText}${actionText} · ${mode}/${fan}${setpoint}</span>`;
+}
 function showTempHistoryTooltipAt(clientX, clientY){
   const tip = $('tempHistoryTip');
   const stage = $('tempHistoryStage');
@@ -1280,7 +1477,8 @@ function showTempHistoryTooltipAt(clientX, clientY){
   tip.style.left = x + 'px';
   tip.style.top = y + 'px';
   tip.style.display = 'block';
-  tip.innerHTML = `<strong>${point.temp.toFixed(1)} ℃</strong><span>${formatHistoryLabel(point.minute, tempHistoryState.usesEpoch, tempHistoryState.samples[tempHistoryState.samples.length - 1]?.minute || point.minute)}</span>`;
+  const event = nearestHistoryEvent(point.minute);
+  tip.innerHTML = `<strong>${point.temp.toFixed(1)} ℃</strong><span>${formatHistoryLabel(point.minute, tempHistoryState.usesEpoch, tempHistoryState.samples[tempHistoryState.samples.length - 1]?.minute || point.minute)}</span>${historyEventText(event)}`;
 }
 function showTempHistoryTooltip(evt){
   if (tempHistoryDrag.active) return;
@@ -1899,6 +2097,149 @@ function renderPresets(items){
     </div>`;
   }).join('');
 }
+function ensureSleepPresets(){
+  if ($('sleepPresetPanel') || !$('curveControlMode')) return;
+  $('curveControlMode').closest('.form-grid')?.insertAdjacentHTML('afterend', `
+    <div class="sleep-presets" id="sleepPresetPanel">
+      <button class="secondary" type="button" onclick="applySleepPreset('fast')">快速入睡</button>
+      <button class="secondary" type="button" onclick="applySleepPreset('stable')">整夜平稳</button>
+      <button class="secondary" type="button" onclick="applySleepPreset('warm')">怕冷防醒</button>
+      <button class="secondary" type="button" onclick="applySleepPreset('quiet')">省电安静</button>
+    </div>
+  `);
+}
+function applySleepPreset(kind){
+  const start = hhmmToMin($('sleepStart').value || '23:00');
+  const presets = {
+    fast: {mode:'staged', quiet:70, duration:510, interval:60, deadband:0.35, delta:0.5, points:[[0,27],[45,25],[210,25.5],[510,26.5]]},
+    stable: {mode:'staged', quiet:100, duration:540, interval:120, deadband:0.4, delta:0.5, points:[[0,26.5],[120,25.5],[360,25.8],[540,26.5]]},
+    warm: {mode:'staged', quiet:60, duration:540, interval:120, deadband:0.45, delta:0.5, points:[[0,27],[120,26.5],[360,26.8],[540,27.2]]},
+    quiet: {mode:'quiet', quiet:0, duration:540, interval:180, deadband:0.5, delta:0.6, points:[[0,26.5],[180,26],[420,26.3],[540,26.8]]}
+  };
+  const p = presets[kind] || presets.stable;
+  setValue('curveControlMode', p.mode, true);
+  setValue('quietSwitchMinute', minToHhmm(start + p.quiet), true);
+  setValue('sleepDuration', minToHhmm(start + p.duration), true);
+  setValue('controlInterval', p.interval, true);
+  setValue('deadband', p.deadband, true);
+  setValue('autoSendDelta', p.delta, true);
+  syncCurveTextarea(p.points.map(item => ({minute:item[0], temp:item[1]})));
+  ['curveControlMode','quietSwitchMinute','sleepDuration','controlInterval','deadband','autoSendDelta','curve'].forEach(id => dirty.add(id));
+  scheduleCurveAutoSave();
+}
+function formatLogMinute(minute){
+  minute = Number(minute || 0);
+  if (minute > 1000000) {
+    const d = new Date(minute * 60000);
+    return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+  return `+${minute}分`;
+}
+function renderControlLog(logs){
+  const box = $('controlLog');
+  if (!box) return;
+  if (!logs || !logs.length) {
+    box.innerHTML = '<div class="empty">暂无决策日志</div>';
+    if ($('controlLogBadge')) $('controlLogBadge').textContent = '0 条';
+    return;
+  }
+  box.innerHTML = logs.slice().reverse().map(item => {
+    const temps = [
+      Number.isFinite(Number(item.room)) ? `室温 ${Number(item.room).toFixed(1)}℃` : '',
+      Number.isFinite(Number(item.target)) ? `目标 ${Number(item.target).toFixed(1)}℃` : '',
+      Number.isFinite(Number(item.setpoint)) ? `设定 ${Number(item.setpoint).toFixed(1)}℃` : ''
+    ].filter(Boolean).join(' · ');
+    return `<div class="log-item"><strong>${formatLogMinute(item.minute)}</strong><div>${esc(item.action || '')} / ${esc(item.stage || '')}<br><span class="label">${esc(temps || '--')}</span><br>${esc(item.note || '')}</div></div>`;
+  }).join('');
+  if ($('controlLogBadge')) $('controlLogBadge').textContent = `${logs.length} 条`;
+}
+async function refreshControlLog(){
+  if (controlLogRefreshInFlight || !$('controlLog')) return;
+  controlLogRefreshInFlight = true;
+  try {
+    const r = await fetch('/api/control-log');
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    renderControlLog(data.logs || []);
+  } catch(e) {
+    if ($('controlLog')) $('controlLog').innerHTML = `<div class="empty">${esc(e.message || '日志读取失败')}</div>`;
+  } finally {
+    controlLogRefreshInFlight = false;
+  }
+}
+function settingsPayload(){
+  return {
+    sensorTempOffset:Number($('sensorTempOffset').value || 0),
+    sensorHumidityOffset:Number($('sensorHumidityOffset').value || 0),
+    predictiveSkipEnabled:$('predictiveSkipEnabled').value === 'true',
+    adaptiveControlEnabled:$('adaptiveControlEnabled').value === 'true',
+    closedLoopFastGain:Number($('closedLoopFastGain').value || 2.6),
+    closedLoopQuietGain:Number($('closedLoopQuietGain').value || 0.9),
+    capTurbo:$('capTurbo').value === 'true',
+    capQuiet:$('capQuiet').value === 'true',
+    capSleep:$('capSleep').value === 'true',
+    capSwingV:$('capSwingV').value === 'true',
+    capSwingH:$('capSwingH').value === 'true',
+    capFilter:$('capFilter').value === 'true'
+  };
+}
+async function saveSettings(){
+  try {
+    await post('/api/settings', settingsPayload(), '维护与闭环设置已保存', ['sensorTempOffset','sensorHumidityOffset','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter']);
+  } catch(e) { msg(e.message || '设置保存失败', true); }
+}
+function exportConfig(){
+  window.location.href = '/api/config-export';
+}
+async function importConfigFile(file){
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    await post('/api/config-import', parsed, '配置已导入');
+  } catch(e) { msg(e.message || '配置导入失败', true); }
+}
+async function uploadOtaFile(file){
+  if (!file) return;
+  try {
+    msg('正在上传 OTA，请不要断电...');
+    const form = new FormData();
+    form.append('firmware', file, file.name || 'firmware.bin');
+    const r = await fetch('/api/ota', {method:'POST', body:form});
+    const t = await r.text();
+    if (!r.ok) throw new Error(t || 'OTA 上传失败');
+    msg('OTA 已上传，设备正在重启');
+  } catch(e) { msg(e.message || 'OTA 失败', true); }
+}
+function applyCapabilities(){
+  const cfg = state.config || {};
+  const caps = {
+    turbo: cfg.capTurbo !== false,
+    quiet: cfg.capQuiet !== false,
+    sleep: cfg.capSleep !== false,
+    swingV: cfg.capSwingV !== false,
+    swingH: cfg.capSwingH !== false,
+    filter: cfg.capFilter !== false
+  };
+  const special = $('specialMode');
+  if (special) {
+    [...special.options].forEach(opt => {
+      if (opt.value === 'turbo') opt.disabled = !caps.turbo;
+      if (opt.value === 'quiet') opt.disabled = !caps.quiet;
+      if (opt.value === 'sleep') opt.disabled = !caps.sleep;
+    });
+    if (special.selectedOptions[0]?.disabled) special.value = 'none';
+  }
+  [['swingV', caps.swingV], ['swingH', caps.swingH], ['filterFlag', caps.filter]].forEach(([id, enabled]) => {
+    const el = $(id);
+    if (el) {
+      el.disabled = !enabled;
+      if (!enabled) el.value = 'false';
+    }
+  });
+  enhanceSegmentedControls();
+  ['specialMode','swingV','swingH','filterFlag'].forEach(syncSegmentedControl);
+}
 function fitStatusReadout(id){
   const el = $(id);
   const card = el?.closest('.metric');
@@ -1999,6 +2340,20 @@ async function refresh(force=false){
     setValue('controlInterval', state.config.controlIntervalSec, force);
     setValue('deadband', state.config.deadband, force);
     setValue('autoSendDelta', state.config.autoSendDelta ?? 0.5, force);
+    setValue('sensorTempOffset', state.config.sensorTempOffset ?? 0, force);
+    setValue('sensorHumidityOffset', state.config.sensorHumidityOffset ?? 0, force);
+    setValue('predictiveSkipEnabled', String(state.config.predictiveSkipEnabled !== false), force);
+    setValue('adaptiveControlEnabled', String(!!state.config.adaptiveControlEnabled), force);
+    setValue('closedLoopFastGain', state.config.closedLoopFastGain ?? 2.6, force);
+    setValue('closedLoopQuietGain', state.config.closedLoopQuietGain ?? 0.9, force);
+    setValue('capTurbo', String(state.config.capTurbo !== false), force);
+    setValue('capQuiet', String(state.config.capQuiet !== false), force);
+    setValue('capSleep', String(state.config.capSleep !== false), force);
+    setValue('capSwingV', String(state.config.capSwingV !== false), force);
+    setValue('capSwingH', String(state.config.capSwingH !== false), force);
+    setValue('capFilter', String(state.config.capFilter !== false), force);
+    if ($('settingsBadge')) $('settingsBadge').textContent = `急速学习 ${Number(state.config.learnedFastRate || 0).toFixed(3)} · 安静学习 ${Number(state.config.learnedQuietRate || 0).toFixed(3)}`;
+    applyCapabilities();
     setValue('curve', JSON.stringify(state.config.curve), force);
     renderCurve();
     renderLearned(state.learned);
@@ -2149,18 +2504,31 @@ async function saveCurve(auto=false){
 }
 ensureCurveStrategyControls();
 enhanceSegmentedControls();
+ensureSleepPresets();
 ensureTempHistorySection();
 bindTempHistoryInteractions();
 enableCollapsibleSections();
 bindDirty();
 bindRemoteStatePersistence();
 bindCurveEditor();
+$('configImportFile')?.addEventListener('change', evt => {
+  const file = evt.target.files && evt.target.files[0];
+  evt.target.value = '';
+  importConfigFile(file);
+});
+$('otaFile')?.addEventListener('change', evt => {
+  const file = evt.target.files && evt.target.files[0];
+  evt.target.value = '';
+  uploadOtaFile(file);
+});
 refresh(true);
 refreshTempHistory();
+refreshControlLog();
 window.addEventListener('resize', () => requestAnimationFrame(fitStatusReadouts));
 setInterval(refreshLive, 1000);
 setInterval(() => refresh(false), 15000);
 setInterval(refreshTempHistory, 60000);
+setInterval(refreshControlLog, 15000);
 </script>
 </body>
 </html>
@@ -2591,7 +2959,7 @@ const char kRemoteHtml[] PROGMEM = R"REMOTE(
       width: 100%;
       max-width: 430px;
       margin: 0 auto;
-      padding: 14px 14px 26px;
+      padding: 14px 14px 104px;
       overflow: hidden;
     }
     .topbar {
@@ -2861,8 +3229,31 @@ const char kRemoteHtml[] PROGMEM = R"REMOTE(
       font-size: 13px;
       text-align: center;
     }
+    .quickbar {
+      position: fixed;
+      left: 50%;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 10;
+      width: min(410px, calc(100% - 20px));
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(238, 230, 216, 0.94);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+    .quickbar button {
+      min-height: 48px;
+      border-radius: 16px;
+      font-size: 13px;
+      padding: 7px 6px;
+    }
     @media (max-width: 380px) {
-      .wrap { padding: 10px 10px 22px; }
+      .wrap { padding: 10px 10px 92px; }
       .remote { padding: 14px; border-radius: 28px; }
       .target { font-size: 46px; }
       .temp-pad { grid-template-columns: 1fr 74px 1fr; gap: 8px; }
@@ -2871,7 +3262,7 @@ const char kRemoteHtml[] PROGMEM = R"REMOTE(
       .learn-tools { grid-template-columns: 1fr; }
     }
     @media (max-width: 330px) {
-      .wrap { padding: 8px 8px 20px; }
+      .wrap { padding: 8px 8px 92px; }
       .remote { padding: 12px; border-radius: 24px; }
       .target { font-size: 40px; }
       .temp-pad { grid-template-columns: 1fr 64px 1fr; }
@@ -2948,6 +3339,12 @@ const char kRemoteHtml[] PROGMEM = R"REMOTE(
       </div>
     </div>
   </div>
+  <div class="quickbar">
+    <button type="button" onclick="togglePower()">电源</button>
+    <button type="button" onclick="adjustTemp(-0.5)">-0.5℃</button>
+    <button class="send" type="button" onclick="sendAc()">发送</button>
+    <button type="button" onclick="adjustTemp(0.5)">+0.5℃</button>
+  </div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -2993,7 +3390,7 @@ function applyRemoteConfig(cfg){
 }
 function setMsg(text, warn=false){
   $('msg').textContent = text || '';
-  $('msg').style.color = warn ? '#fecaca' : '#bfdbfe';
+  $('msg').style.color = warn ? 'var(--danger)' : 'var(--accent)';
 }
 async function apiPost(url, body){
   const r = await fetch(url, {
@@ -3314,15 +3711,33 @@ void normalizeExclusiveSpecials(bool &turbo, bool &quiet, bool &sleep) {
 }
 
 AcRequest normalizedAcRequest(AcRequest request) {
+  if (!config.capTurbo) request.turbo = false;
+  if (!config.capQuiet) request.quiet = false;
+  if (!config.capSleep) request.sleep = false;
+  if (!config.capSwingV) request.swingV = false;
+  if (!config.capSwingH) request.swingH = false;
+  if (!config.capFilter) request.filter = false;
   normalizeExclusiveSpecials(request.turbo, request.quiet, request.sleep);
   return request;
 }
 
 void normalizeConfigRemoteState() {
+  if (!config.capTurbo) config.remoteTurbo = false;
+  if (!config.capQuiet) config.remoteQuiet = false;
+  if (!config.capSleep) config.remoteSleep = false;
+  if (!config.capSwingV) config.remoteSwingV = false;
+  if (!config.capSwingH) config.remoteSwingH = false;
+  if (!config.capFilter) config.remoteFilter = false;
   normalizeExclusiveSpecials(config.remoteTurbo, config.remoteQuiet, config.remoteSleep);
 }
 
 void normalizePresetCommand(PresetCommand &cmd) {
+  if (!config.capTurbo) cmd.turbo = false;
+  if (!config.capQuiet) cmd.quiet = false;
+  if (!config.capSleep) cmd.sleep = false;
+  if (!config.capSwingV) cmd.swingV = false;
+  if (!config.capSwingH) cmd.swingH = false;
+  if (!config.capFilter) cmd.filter = false;
   normalizeExclusiveSpecials(cmd.turbo, cmd.quiet, cmd.sleep);
 }
 
@@ -3335,6 +3750,15 @@ void normalizeCurveControlConfig() {
     config.curveEndAction = "hold";
   }
   if (config.quietSwitchMinute > 1439) config.quietSwitchMinute = 1439;
+}
+
+void normalizeTuningConfig() {
+  config.sensorTempOffset = clampFloat(config.sensorTempOffset, -5.0f, 5.0f);
+  config.sensorHumidityOffset = clampFloat(config.sensorHumidityOffset, -20.0f, 20.0f);
+  config.learnedFastRate = clampFloat(config.learnedFastRate, 0.0f, 2.0f);
+  config.learnedQuietRate = clampFloat(config.learnedQuietRate, 0.0f, 2.0f);
+  config.closedLoopFastGain = clampFloat(config.closedLoopFastGain, 0.5f, 5.0f);
+  config.closedLoopQuietGain = clampFloat(config.closedLoopQuietGain, 0.2f, 3.0f);
 }
 
 bool readJsonFile(const char *path, JsonDocument &doc) {
@@ -3489,6 +3913,20 @@ void saveConfig() {
   doc["autoSendDelta"] = config.autoSendDelta;
   doc["minSetpoint"] = config.minSetpoint;
   doc["maxSetpoint"] = config.maxSetpoint;
+  doc["sensorTempOffset"] = config.sensorTempOffset;
+  doc["sensorHumidityOffset"] = config.sensorHumidityOffset;
+  doc["predictiveSkipEnabled"] = config.predictiveSkipEnabled;
+  doc["adaptiveControlEnabled"] = config.adaptiveControlEnabled;
+  doc["learnedFastRate"] = config.learnedFastRate;
+  doc["learnedQuietRate"] = config.learnedQuietRate;
+  doc["closedLoopFastGain"] = config.closedLoopFastGain;
+  doc["closedLoopQuietGain"] = config.closedLoopQuietGain;
+  doc["capTurbo"] = config.capTurbo;
+  doc["capQuiet"] = config.capQuiet;
+  doc["capSleep"] = config.capSleep;
+  doc["capSwingV"] = config.capSwingV;
+  doc["capSwingH"] = config.capSwingH;
+  doc["capFilter"] = config.capFilter;
   JsonArray curve = doc["curve"].to<JsonArray>();
   for (uint8_t i = 0; i < config.curveCount; i++) {
     JsonObject point = curve.add<JsonObject>();
@@ -3532,6 +3970,22 @@ void loadConfig() {
   config.autoSendDelta = doc["autoSendDelta"] | config.autoSendDelta;
   config.minSetpoint = 16.0f;
   config.maxSetpoint = 32.0f;
+  config.sensorTempOffset = doc["sensorTempOffset"] | config.sensorTempOffset;
+  config.sensorHumidityOffset = doc["sensorHumidityOffset"] | config.sensorHumidityOffset;
+  config.predictiveSkipEnabled = doc["predictiveSkipEnabled"] | config.predictiveSkipEnabled;
+  config.adaptiveControlEnabled = doc["adaptiveControlEnabled"] | config.adaptiveControlEnabled;
+  config.learnedFastRate = doc["learnedFastRate"] | config.learnedFastRate;
+  config.learnedQuietRate = doc["learnedQuietRate"] | config.learnedQuietRate;
+  config.closedLoopFastGain = doc["closedLoopFastGain"] | config.closedLoopFastGain;
+  config.closedLoopQuietGain = doc["closedLoopQuietGain"] | config.closedLoopQuietGain;
+  config.capTurbo = doc["capTurbo"] | config.capTurbo;
+  config.capQuiet = doc["capQuiet"] | config.capQuiet;
+  config.capSleep = doc["capSleep"] | config.capSleep;
+  config.capSwingV = doc["capSwingV"] | config.capSwingV;
+  config.capSwingH = doc["capSwingH"] | config.capSwingH;
+  config.capFilter = doc["capFilter"] | config.capFilter;
+  normalizeTuningConfig();
+  normalizeConfigRemoteState();
   JsonArray curve = doc["curve"].as<JsonArray>();
   if (!curve.isNull()) {
     config.curveCount = 0;
@@ -3864,6 +4318,213 @@ uint32_t currentHistoryMinute(bool *usesEpochOut = nullptr) {
   return usesEpoch ? static_cast<uint32_t>(now / 60) : millis() / 60000UL;
 }
 
+int16_t tempToTenths(float value) {
+  return isnan(value) ? INT16_MIN : static_cast<int16_t>(roundf(value * 10.0f));
+}
+
+void copyText(char *dest, size_t len, const char *src) {
+  if (len == 0) return;
+  snprintf(dest, len, "%s", src == nullptr ? "" : src);
+}
+
+void setPendingAcContext(const char *source, const char *action, float target = NAN, float setpoint = NAN) {
+  copyText(pendingAcSource, sizeof(pendingAcSource), source);
+  copyText(pendingAcAction, sizeof(pendingAcAction), action);
+  pendingAcTarget = target;
+  pendingAcSetpoint = setpoint;
+}
+
+void resetPendingAcContext() {
+  setPendingAcContext("manual", "send");
+}
+
+void clearControlEvents() {
+  controlEventHead = 0;
+  controlEventCount = 0;
+}
+
+void appendControlEventMemory(const ControlEvent &event) {
+  controlEvents[controlEventHead] = event;
+  controlEventHead = (controlEventHead + 1) % kControlEventPoints;
+  if (controlEventCount < kControlEventPoints) controlEventCount++;
+}
+
+bool saveControlEvents() {
+  File file = LittleFS.open(kControlEventsPath, "w");
+  if (!file) return false;
+  file.printf("CE1,%u,%u\n", controlEventsUseEpoch ? 1 : 0, controlEventCount);
+  for (uint16_t i = 0; i < controlEventCount; i++) {
+    uint16_t idx = (controlEventHead + kControlEventPoints - controlEventCount + i) % kControlEventPoints;
+    const ControlEvent &event = controlEvents[idx];
+    file.printf("%lu,%d,%d,%d,%s,%s,%s,%s,%u,%u,%u,%u\n",
+                static_cast<unsigned long>(event.minute),
+                static_cast<int>(event.room10),
+                static_cast<int>(event.target10),
+                static_cast<int>(event.setpoint10),
+                event.source,
+                event.action,
+                event.mode,
+                event.fan,
+                event.power ? 1 : 0,
+                event.turbo ? 1 : 0,
+                event.quiet ? 1 : 0,
+                event.sleep ? 1 : 0);
+  }
+  bool ok = file.getWriteError() == 0;
+  file.close();
+  return ok;
+}
+
+void loadControlEvents() {
+  clearControlEvents();
+  if (!LittleFS.exists(kControlEventsPath)) return;
+  File file = LittleFS.open(kControlEventsPath, "r");
+  if (!file) return;
+  String header = file.readStringUntil('\n');
+  header.trim();
+  unsigned int usesEpoch = 0;
+  unsigned int count = 0;
+  if (sscanf(header.c_str(), "CE1,%u,%u", &usesEpoch, &count) != 2) {
+    file.close();
+    return;
+  }
+  controlEventsUseEpoch = usesEpoch != 0;
+  while (file.available() && controlEventCount < kControlEventPoints) {
+    String line = file.readStringUntil('\n');
+    line.trim();
+    if (!line.length()) continue;
+    unsigned long minute = 0;
+    int room10 = INT16_MIN;
+    int target10 = INT16_MIN;
+    int setpoint10 = INT16_MIN;
+    int power = 0;
+    int turbo = 0;
+    int quiet = 0;
+    int sleep = 0;
+    char source[12] = "";
+    char action[16] = "";
+    char mode[8] = "";
+    char fan[8] = "";
+    int matched = sscanf(line.c_str(), "%lu,%d,%d,%d,%11[^,],%15[^,],%7[^,],%7[^,],%d,%d,%d,%d",
+                         &minute,
+                         &room10,
+                         &target10,
+                         &setpoint10,
+                         source,
+                         action,
+                         mode,
+                         fan,
+                         &power,
+                         &turbo,
+                         &quiet,
+                         &sleep);
+    if (matched >= 12) {
+      ControlEvent event;
+      event.minute = static_cast<uint32_t>(minute);
+      event.room10 = static_cast<int16_t>(room10);
+      event.target10 = static_cast<int16_t>(target10);
+      event.setpoint10 = static_cast<int16_t>(setpoint10);
+      copyText(event.source, sizeof(event.source), source);
+      copyText(event.action, sizeof(event.action), action);
+      copyText(event.mode, sizeof(event.mode), mode);
+      copyText(event.fan, sizeof(event.fan), fan);
+      event.power = power != 0;
+      event.turbo = turbo != 0;
+      event.quiet = quiet != 0;
+      event.sleep = sleep != 0;
+      appendControlEventMemory(event);
+    }
+  }
+  file.close();
+}
+
+void addDecisionLog(const char *action, const char *stage, const char *note,
+                    float room, float target, float setpoint) {
+  DecisionLogEntry &entry = decisionLog[decisionLogHead];
+  entry.minute = currentHistoryMinute();
+  entry.room10 = tempToTenths(room);
+  entry.target10 = tempToTenths(target);
+  entry.setpoint10 = tempToTenths(setpoint);
+  copyText(entry.action, sizeof(entry.action), action);
+  copyText(entry.stage, sizeof(entry.stage), stage);
+  copyText(entry.note, sizeof(entry.note), note);
+  decisionLogHead = (decisionLogHead + 1) % kDecisionLogPoints;
+  if (decisionLogCount < kDecisionLogPoints) decisionLogCount++;
+}
+
+void addControlEvent(const char *source, const char *action, const AcRequest &request,
+                     float target = NAN, float setpoint = NAN) {
+  bool usesEpoch = false;
+  uint32_t minute = currentHistoryMinute(&usesEpoch);
+  if (controlEventCount > 0 && usesEpoch != controlEventsUseEpoch) {
+    clearControlEvents();
+    LittleFS.remove(kControlEventsPath);
+  }
+  controlEventsUseEpoch = usesEpoch;
+  ControlEvent event;
+  event.minute = minute;
+  event.room10 = tempToTenths(roomTempC);
+  event.target10 = tempToTenths(target);
+  event.setpoint10 = tempToTenths(isnan(setpoint) ? request.degrees : setpoint);
+  copyText(event.source, sizeof(event.source), source);
+  copyText(event.action, sizeof(event.action), action);
+  copyText(event.mode, sizeof(event.mode), request.mode.c_str());
+  copyText(event.fan, sizeof(event.fan), request.fan.c_str());
+  event.power = request.power;
+  event.turbo = request.turbo;
+  event.quiet = request.quiet;
+  event.sleep = request.sleep;
+  appendControlEventMemory(event);
+  saveControlEvents();
+}
+
+bool tempTrendPerMinute(uint16_t windowMinutes, float *slopeOut) {
+  if (tempHistoryCount < 2 || slopeOut == nullptr) return false;
+  uint16_t lastIdx = (tempHistoryHead + kTempHistoryPoints - 1) % kTempHistoryPoints;
+  const TempHistorySample &last = tempHistory[lastIdx];
+  int firstIdx = -1;
+  for (uint16_t i = 0; i < tempHistoryCount; i++) {
+    uint16_t idx = (tempHistoryHead + kTempHistoryPoints - tempHistoryCount + i) % kTempHistoryPoints;
+    uint32_t age = last.minute >= tempHistory[idx].minute ? last.minute - tempHistory[idx].minute : 0;
+    if (age <= windowMinutes) {
+      firstIdx = idx;
+      break;
+    }
+  }
+  if (firstIdx < 0 || firstIdx == lastIdx) return false;
+  int32_t deltaMin = static_cast<int32_t>(last.minute) - static_cast<int32_t>(tempHistory[firstIdx].minute);
+  if (deltaMin < 3) return false;
+  *slopeOut = (last.temp10 - tempHistory[firstIdx].temp10) / 10.0f / deltaMin;
+  return true;
+}
+
+void updateAdaptiveRate(const String &stage, float target) {
+  if (!config.adaptiveControlEnabled || isnan(roomTempC)) return;
+  float slope = 0.0f;
+  if (!tempTrendPerMinute(20, &slope)) return;
+  bool movingTowardTarget = (roomTempC > target && slope < -0.005f) || (roomTempC < target && slope > 0.005f);
+  if (!movingTowardTarget) return;
+  float rate = fabs(slope);
+  float *learned = stage == "fast" ? &config.learnedFastRate : &config.learnedQuietRate;
+  *learned = *learned <= 0.0f ? rate : (*learned * 0.82f + rate * 0.18f);
+  normalizeTuningConfig();
+}
+
+bool shouldPredictiveSkip(float target, String *reasonOut) {
+  if (!config.predictiveSkipEnabled || isnan(roomTempC)) return false;
+  float slope = 0.0f;
+  if (!tempTrendPerMinute(15, &slope)) return false;
+  float error = fabs(roomTempC - target);
+  bool movingTowardTarget = (roomTempC > target && slope < -0.01f) || (roomTempC < target && slope > 0.01f);
+  if (!movingTowardTarget || error <= config.deadband || error > 1.4f) return false;
+  float minutesToBand = (error - config.deadband) / max(0.01f, fabs(slope));
+  if (minutesToBand > 25.0f) return false;
+  if (reasonOut != nullptr) {
+    *reasonOut = "趋势已接近目标，预计 " + String(minutesToBand, 0) + " 分钟进入死区";
+  }
+  return true;
+}
+
 void recordTemperatureHistory() {
   if (isnan(roomTempC)) return;
 
@@ -3887,8 +4548,8 @@ void updateSensor() {
   lastSensorMs = millis();
   float t = sht31.readTemperature();
   float h = sht31.readHumidity();
-  if (!isnan(t)) roomTempC = t;
-  if (!isnan(h)) roomHumidity = h;
+  if (!isnan(t)) roomTempC = t + config.sensorTempOffset;
+  if (!isnan(h)) roomHumidity = clampFloat(h + config.sensorHumidityOffset, 0.0f, 100.0f);
   recordTemperatureHistory();
 }
 
@@ -3997,7 +4658,8 @@ void rememberAcState(const AcRequest &request) {
   saveConfig();
 }
 
-bool sendAcNow(const AcRequest &request) {
+bool sendAcNow(const AcRequest &request, const char *source = "manual", const char *action = "send",
+               float target = NAN, float setpoint = NAN) {
   AcRequest normalized = normalizedAcRequest(request);
   if (IRac::isProtocolSupported(config.acProtocol)) {
     irBusy = true;
@@ -4018,6 +4680,9 @@ bool sendAcNow(const AcRequest &request) {
       rememberAcState(normalized);
       if (normalized.power) lastSentSetpoint = clampFloat(normalized.degrees, config.minSetpoint, config.maxSetpoint);
     }
+    addControlEvent(source, ok ? action : "failed", normalized, target, isnan(setpoint) ? normalized.degrees : setpoint);
+    addDecisionLog(ok ? "sent" : "failed", source, lastActionResult.c_str(), roomTempC, target,
+                   isnan(setpoint) ? normalized.degrees : setpoint);
     return ok;
   }
 
@@ -4028,10 +4693,14 @@ bool sendAcNow(const AcRequest &request) {
       rememberAcState(normalized);
       if (normalized.power) lastSentSetpoint = learned[idx].degrees;
     }
+    addControlEvent(source, ok ? action : "failed", normalized, target, isnan(setpoint) ? learned[idx].degrees : setpoint);
+    addDecisionLog(ok ? "sent_raw" : "failed", source, lastActionResult.c_str(), roomTempC, target,
+                   isnan(setpoint) ? learned[idx].degrees : setpoint);
     return ok;
   }
 
   lastActionResult = "no supported AC protocol or matching learned raw command";
+  addDecisionLog("failed", source, lastActionResult.c_str(), roomTempC, target, setpoint);
   return false;
 }
 
@@ -4076,6 +4745,7 @@ void maintainPresetSchedules() {
     if (preset.lastScheduleKey == minuteKey) continue;
     if (!presetScheduleMatchesDay(preset, wday)) continue;
     pendingAc = requestFromPreset(preset);
+    setPendingAcContext("schedule", "send", NAN, pendingAc.degrees);
     pendingAction = PendingAction::SendAc;
     preset.lastScheduleKey = minuteKey;
     lastActionResult = "preset schedule queued #" + String(preset.id);
@@ -4088,7 +4758,8 @@ void handlePendingIr() {
   PendingAction action = pendingAction;
   pendingAction = PendingAction::None;
   if (action == PendingAction::SendAc) {
-    sendAcNow(pendingAc);
+    sendAcNow(pendingAc, pendingAcSource, pendingAcAction, pendingAcTarget, pendingAcSetpoint);
+    resetPendingAcContext();
   } else if (action == PendingAction::SendLearned) {
     sendLearnedNow(pendingLearnedId);
   }
@@ -4120,8 +4791,13 @@ float closedLoopSetpoint(float target, const String &mode, const String &stage =
     return clampFloat(target, config.minSetpoint, config.maxSetpoint);
   }
   float error = roomTempC - target;
-  float gain = stage == "fast" ? 2.6f : 0.9f;
+  float gain = stage == "fast" ? config.closedLoopFastGain : config.closedLoopQuietGain;
   float limit = stage == "fast" ? 7.0f : 2.0f;
+  if (config.adaptiveControlEnabled) {
+    float learned = stage == "fast" ? config.learnedFastRate : config.learnedQuietRate;
+    if (learned > 0.0f && learned < 0.035f) gain *= 1.18f;
+    if (learned > 0.08f) gain *= 0.92f;
+  }
   float correction = clampFloat(error * gain, -limit, limit);
   return clampFloat(target - correction, config.minSetpoint, config.maxSetpoint);
 }
@@ -4161,21 +4837,39 @@ void runAutoControl() {
       pendingAc.swingH = false;
       pendingAc.filter = false;
       pendingAc.degrees = isnan(lastSentSetpoint) ? 26.0f : lastSentSetpoint;
+      setPendingAcContext("auto", "end_poweroff", NAN, pendingAc.degrees);
       pendingAction = PendingAction::SendAc;
+      addDecisionLog("end_poweroff", "end", "曲线结束，按设置关机", roomTempC, NAN, pendingAc.degrees);
       lastAutoSentSetpoint = NAN;
       lastControlMs = millis();
+    } else if (sleepCurveWasActive) {
+      addDecisionLog("end_hold", "end", "曲线结束，保持当前空调状态，不发射红外", roomTempC, NAN, NAN);
     }
     sleepCurveWasActive = false;
     return;
   }
   sleepCurveWasActive = true;
 
-  if (isnan(roomTempC)) return;
+  if (isnan(roomTempC)) {
+    addDecisionLog("skip_sensor", "active", "等待 SHT31 室温读数", roomTempC, NAN, NAN);
+    return;
+  }
   if (millis() - lastControlMs < static_cast<uint32_t>(config.controlIntervalSec) * 1000UL) return;
 
   float target = clampFloat(targetTempForSleepCurve(elapsed), config.minSetpoint, config.maxSetpoint);
-  if (fabs(roomTempC - target) < config.deadband) return;
   String stage = curveStageForElapsed(elapsed);
+  if (fabs(roomTempC - target) < config.deadband) {
+    addDecisionLog("skip_deadband", stage.c_str(), "室温已在死区内", roomTempC, target, NAN);
+    lastControlMs = millis();
+    return;
+  }
+  String predictiveReason;
+  if (shouldPredictiveSkip(target, &predictiveReason)) {
+    addDecisionLog("skip_predict", stage.c_str(), predictiveReason.c_str(), roomTempC, target, NAN);
+    lastActionResult = "auto skipped predictive";
+    lastControlMs = millis();
+    return;
+  }
   bool fast = stage == "fast";
 
   pendingAc.power = true;
@@ -4188,13 +4882,21 @@ void runAutoControl() {
   pendingAc.swingH = false;
   pendingAc.filter = false;
   pendingAc.degrees = closedLoopSetpoint(target, config.autoMode, stage);
+  updateAdaptiveRate(stage, target);
+  if (config.adaptiveControlEnabled && millis() - lastAdaptiveSaveMs > 30UL * 60UL * 1000UL) {
+    saveConfig();
+    lastAdaptiveSaveMs = millis();
+  }
   if (!isnan(lastAutoSentSetpoint) && fabs(pendingAc.degrees - lastAutoSentSetpoint) <= config.autoSendDelta) {
     lastActionResult = "auto skipped delta=" + String(fabs(pendingAc.degrees - lastAutoSentSetpoint), 1) +
                        "C threshold=" + String(config.autoSendDelta, 1) + "C";
+    addDecisionLog("skip_delta", stage.c_str(), "设定温度变化未超过发送过滤阈值", roomTempC, target, pendingAc.degrees);
     lastControlMs = millis();
     return;
   }
+  setPendingAcContext("auto", "send", target, pendingAc.degrees);
   pendingAction = PendingAction::SendAc;
+  addDecisionLog("queue_send", stage.c_str(), "已排队发送睡眠曲线控制指令", roomTempC, target, pendingAc.degrees);
   lastAutoSentSetpoint = pendingAc.degrees;
   lastControlMs = millis();
 }
@@ -4225,6 +4927,20 @@ void addConfigToJson(JsonObject obj) {
   obj["autoSendDelta"] = config.autoSendDelta;
   obj["minSetpoint"] = config.minSetpoint;
   obj["maxSetpoint"] = config.maxSetpoint;
+  obj["sensorTempOffset"] = config.sensorTempOffset;
+  obj["sensorHumidityOffset"] = config.sensorHumidityOffset;
+  obj["predictiveSkipEnabled"] = config.predictiveSkipEnabled;
+  obj["adaptiveControlEnabled"] = config.adaptiveControlEnabled;
+  obj["learnedFastRate"] = config.learnedFastRate;
+  obj["learnedQuietRate"] = config.learnedQuietRate;
+  obj["closedLoopFastGain"] = config.closedLoopFastGain;
+  obj["closedLoopQuietGain"] = config.closedLoopQuietGain;
+  obj["capTurbo"] = config.capTurbo;
+  obj["capQuiet"] = config.capQuiet;
+  obj["capSleep"] = config.capSleep;
+  obj["capSwingV"] = config.capSwingV;
+  obj["capSwingH"] = config.capSwingH;
+  obj["capFilter"] = config.capFilter;
   JsonArray curve = obj["curve"].to<JsonArray>();
   for (uint8_t i = 0; i < config.curveCount; i++) {
     JsonObject point = curve.add<JsonObject>();
@@ -4334,6 +5050,84 @@ void handleTempHistory() {
     server.sendContent(buffer);
   }
 
+  server.sendContent("]}");
+}
+
+void sendJsonTenths(const char *name, int16_t value, bool leadingComma = true) {
+  if (leadingComma) server.sendContent(",");
+  server.sendContent("\"");
+  server.sendContent(name);
+  server.sendContent("\":");
+  if (value == INT16_MIN) {
+    server.sendContent("null");
+    return;
+  }
+  server.sendContent(String(value / 10.0f, 1));
+}
+
+void handleControlEvents() {
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  server.sendContent("{\"usesEpoch\":");
+  server.sendContent(controlEventsUseEpoch ? "true" : "false");
+  server.sendContent(",\"count\":");
+  server.sendContent(String(controlEventCount));
+  server.sendContent(",\"events\":[");
+  for (uint16_t i = 0; i < controlEventCount; i++) {
+    uint16_t idx = (controlEventHead + kControlEventPoints - controlEventCount + i) % kControlEventPoints;
+    const ControlEvent &event = controlEvents[idx];
+    if (i > 0) server.sendContent(",");
+    server.sendContent("{\"minute\":");
+    server.sendContent(String(event.minute));
+    sendJsonTenths("room", event.room10);
+    sendJsonTenths("target", event.target10);
+    sendJsonTenths("setpoint", event.setpoint10);
+    server.sendContent(",\"source\":\"");
+    server.sendContent(event.source);
+    server.sendContent("\",\"action\":\"");
+    server.sendContent(event.action);
+    server.sendContent("\",\"mode\":\"");
+    server.sendContent(event.mode);
+    server.sendContent("\",\"fan\":\"");
+    server.sendContent(event.fan);
+    server.sendContent("\",\"power\":");
+    server.sendContent(event.power ? "true" : "false");
+    server.sendContent(",\"turbo\":");
+    server.sendContent(event.turbo ? "true" : "false");
+    server.sendContent(",\"quiet\":");
+    server.sendContent(event.quiet ? "true" : "false");
+    server.sendContent(",\"sleep\":");
+    server.sendContent(event.sleep ? "true" : "false");
+    server.sendContent("}");
+  }
+  server.sendContent("]}");
+}
+
+void handleControlLog() {
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  server.sendContent("{\"count\":");
+  server.sendContent(String(decisionLogCount));
+  server.sendContent(",\"logs\":[");
+  for (uint8_t i = 0; i < decisionLogCount; i++) {
+    uint8_t idx = (decisionLogHead + kDecisionLogPoints - decisionLogCount + i) % kDecisionLogPoints;
+    const DecisionLogEntry &entry = decisionLog[idx];
+    if (i > 0) server.sendContent(",");
+    JsonDocument doc;
+    doc["minute"] = entry.minute;
+    doc["action"] = entry.action;
+    doc["stage"] = entry.stage;
+    doc["note"] = entry.note;
+    if (entry.room10 == INT16_MIN) doc["room"] = nullptr;
+    else doc["room"] = entry.room10 / 10.0f;
+    if (entry.target10 == INT16_MIN) doc["target"] = nullptr;
+    else doc["target"] = entry.target10 / 10.0f;
+    if (entry.setpoint10 == INT16_MIN) doc["setpoint"] = nullptr;
+    else doc["setpoint"] = entry.setpoint10 / 10.0f;
+    String out;
+    serializeJson(doc, out);
+    server.sendContent(out);
+  }
   server.sendContent("]}");
 }
 
@@ -4466,6 +5260,7 @@ void handleSendAcPost() {
   pendingAc.swingH = doc["swingH"] | config.remoteSwingH;
   pendingAc.filter = doc["filter"] | config.remoteFilter;
   pendingAc = normalizedAcRequest(pendingAc);
+  setPendingAcContext("manual", "send", NAN, pendingAc.degrees);
   pendingAction = PendingAction::SendAc;
   sendOk("ac send queued");
 }
@@ -4578,6 +5373,7 @@ void handlePresetSendPost() {
     return;
   }
   pendingAc = requestFromPreset(presets[idx]);
+  setPendingAcContext("preset", "send", NAN, pendingAc.degrees);
   pendingAction = PendingAction::SendAc;
   sendOk("preset queued");
 }
@@ -4727,6 +5523,178 @@ void handleCurvePost() {
   sendOk("curve saved");
 }
 
+void applyConfigJson(JsonObject src) {
+  if (src["acProtocol"].is<const char *>()) config.acProtocol = strToDecodeType((src["acProtocol"] | "UNKNOWN"));
+  if (src["acModel"].is<int>()) config.acModel = src["acModel"] | config.acModel;
+  if (src["autoEnabled"].is<bool>()) config.autoEnabled = src["autoEnabled"] | config.autoEnabled;
+  if (src["autoMode"].is<const char *>()) config.autoMode = src["autoMode"] | config.autoMode;
+  if (src["remotePower"].is<bool>()) config.remotePower = src["remotePower"] | config.remotePower;
+  if (src["remoteMode"].is<const char *>()) config.remoteMode = src["remoteMode"] | config.remoteMode;
+  if (src["remoteFan"].is<const char *>()) config.remoteFan = src["remoteFan"] | config.remoteFan;
+  if (src["remoteDegrees"].is<float>() || src["remoteDegrees"].is<int>()) {
+    config.remoteDegrees = clampFloat(src["remoteDegrees"] | config.remoteDegrees, 16.0f, 32.0f);
+  }
+  if (src["remoteTurbo"].is<bool>()) config.remoteTurbo = src["remoteTurbo"] | config.remoteTurbo;
+  if (src["remoteQuiet"].is<bool>()) config.remoteQuiet = src["remoteQuiet"] | config.remoteQuiet;
+  if (src["remoteSleep"].is<bool>()) config.remoteSleep = src["remoteSleep"] | config.remoteSleep;
+  if (src["remoteSwingV"].is<bool>()) config.remoteSwingV = src["remoteSwingV"] | config.remoteSwingV;
+  if (src["remoteSwingH"].is<bool>()) config.remoteSwingH = src["remoteSwingH"] | config.remoteSwingH;
+  if (src["remoteFilter"].is<bool>()) config.remoteFilter = src["remoteFilter"] | config.remoteFilter;
+  if (src["curveControlMode"].is<const char *>()) config.curveControlMode = src["curveControlMode"] | config.curveControlMode;
+  if (src["curveEndAction"].is<const char *>()) config.curveEndAction = src["curveEndAction"] | config.curveEndAction;
+  if (src["quietSwitchMinute"].is<int>()) config.quietSwitchMinute = src["quietSwitchMinute"] | config.quietSwitchMinute;
+  if (src["sleepStartMinute"].is<int>()) config.sleepStartMinute = (src["sleepStartMinute"] | config.sleepStartMinute) % 1440;
+  if (src["sleepDurationMinute"].is<int>()) config.sleepDurationMinute = src["sleepDurationMinute"] | config.sleepDurationMinute;
+  if (src["controlIntervalSec"].is<int>()) {
+    uint16_t requestedInterval = src["controlIntervalSec"] | config.controlIntervalSec;
+    config.controlIntervalSec = requestedInterval < 5 ? 5 : requestedInterval;
+  }
+  if (src["deadband"].is<float>() || src["deadband"].is<int>()) config.deadband = src["deadband"] | config.deadband;
+  if (src["autoSendDelta"].is<float>() || src["autoSendDelta"].is<int>()) {
+    config.autoSendDelta = clampFloat(src["autoSendDelta"] | config.autoSendDelta, 0.0f, 10.0f);
+  }
+  if (src["sensorTempOffset"].is<float>() || src["sensorTempOffset"].is<int>()) config.sensorTempOffset = src["sensorTempOffset"] | config.sensorTempOffset;
+  if (src["sensorHumidityOffset"].is<float>() || src["sensorHumidityOffset"].is<int>()) config.sensorHumidityOffset = src["sensorHumidityOffset"] | config.sensorHumidityOffset;
+  if (src["predictiveSkipEnabled"].is<bool>()) config.predictiveSkipEnabled = src["predictiveSkipEnabled"] | config.predictiveSkipEnabled;
+  if (src["adaptiveControlEnabled"].is<bool>()) config.adaptiveControlEnabled = src["adaptiveControlEnabled"] | config.adaptiveControlEnabled;
+  if (src["learnedFastRate"].is<float>() || src["learnedFastRate"].is<int>()) config.learnedFastRate = src["learnedFastRate"] | config.learnedFastRate;
+  if (src["learnedQuietRate"].is<float>() || src["learnedQuietRate"].is<int>()) config.learnedQuietRate = src["learnedQuietRate"] | config.learnedQuietRate;
+  if (src["closedLoopFastGain"].is<float>() || src["closedLoopFastGain"].is<int>()) config.closedLoopFastGain = src["closedLoopFastGain"] | config.closedLoopFastGain;
+  if (src["closedLoopQuietGain"].is<float>() || src["closedLoopQuietGain"].is<int>()) config.closedLoopQuietGain = src["closedLoopQuietGain"] | config.closedLoopQuietGain;
+  if (src["capTurbo"].is<bool>()) config.capTurbo = src["capTurbo"] | config.capTurbo;
+  if (src["capQuiet"].is<bool>()) config.capQuiet = src["capQuiet"] | config.capQuiet;
+  if (src["capSleep"].is<bool>()) config.capSleep = src["capSleep"] | config.capSleep;
+  if (src["capSwingV"].is<bool>()) config.capSwingV = src["capSwingV"] | config.capSwingV;
+  if (src["capSwingH"].is<bool>()) config.capSwingH = src["capSwingH"] | config.capSwingH;
+  if (src["capFilter"].is<bool>()) config.capFilter = src["capFilter"] | config.capFilter;
+  JsonArray curve = src["curve"].as<JsonArray>();
+  if (!curve.isNull()) {
+    config.curveCount = 0;
+    for (JsonObject point : curve) {
+      if (config.curveCount >= kMaxCurvePoints) break;
+      config.curve[config.curveCount].minute = point["minute"] | 0;
+      config.curve[config.curveCount].temp = clampFloat(point["temp"] | 26.0f, 16.0f, 32.0f);
+      config.curveCount++;
+    }
+    if (config.curveCount == 0) {
+      config.curve[0] = {0, 26.0f};
+      config.curveCount = 1;
+    }
+  }
+  config.minSetpoint = 16.0f;
+  config.maxSetpoint = 32.0f;
+  normalizeCurveControlConfig();
+  normalizeTuningConfig();
+  normalizeConfigRemoteState();
+}
+
+void handleSettingsPost() {
+  JsonDocument doc;
+  if (!parseBody(doc)) return;
+  JsonObject src = doc.as<JsonObject>();
+  applyConfigJson(src);
+  saveConfig();
+  sendOk("settings saved");
+}
+
+void handleConfigExport() {
+  JsonDocument doc;
+  doc["version"] = 1;
+  JsonObject cfg = doc["config"].to<JsonObject>();
+  addConfigToJson(cfg);
+  JsonArray presetArr = doc["presets"].to<JsonArray>();
+  for (uint8_t i = 0; i < presetCount; i++) {
+    JsonObject item = presetArr.add<JsonObject>();
+    item["id"] = presets[i].id;
+    item["name"] = presets[i].name;
+    item["power"] = presets[i].power;
+    item["degrees"] = presets[i].degrees;
+    item["mode"] = presets[i].mode;
+    item["fan"] = presets[i].fan;
+    item["turbo"] = presets[i].turbo;
+    item["quiet"] = presets[i].quiet;
+    item["sleep"] = presets[i].sleep;
+    item["swingV"] = presets[i].swingV;
+    item["swingH"] = presets[i].swingH;
+    item["filter"] = presets[i].filter;
+    item["scheduleEnabled"] = presets[i].scheduleEnabled;
+    item["scheduleMinute"] = presets[i].scheduleMinute;
+    item["scheduleMode"] = presets[i].scheduleMode;
+    item["dayMask"] = presets[i].dayMask;
+  }
+  String out;
+  serializeJson(doc, out);
+  server.sendHeader("Content-Disposition", "attachment; filename=ir-ac-config.json");
+  server.send(200, "application/json", out);
+}
+
+void handleConfigImport() {
+  JsonDocument doc;
+  if (!parseBody(doc)) return;
+  JsonObject cfg = doc["config"].as<JsonObject>();
+  if (cfg.isNull()) cfg = doc.as<JsonObject>();
+  applyConfigJson(cfg);
+
+  JsonArray presetArr = doc["presets"].as<JsonArray>();
+  if (!presetArr.isNull()) {
+    presetCount = 0;
+    for (JsonObject item : presetArr) {
+      if (presetCount >= kMaxPresetCommands) break;
+      PresetCommand &cmd = presets[presetCount];
+      cmd.id = item["id"] | static_cast<uint8_t>(presetCount + 1);
+      cmd.name = item["name"] | "";
+      cmd.power = item["power"] | true;
+      cmd.degrees = clampFloat(item["degrees"] | 26.0f, 16.0f, 32.0f);
+      cmd.mode = item["mode"] | "cool";
+      cmd.fan = item["fan"] | "auto";
+      cmd.turbo = item["turbo"] | false;
+      cmd.quiet = item["quiet"] | false;
+      cmd.sleep = item["sleep"] | false;
+      cmd.swingV = item["swingV"] | false;
+      cmd.swingH = item["swingH"] | false;
+      cmd.filter = item["filter"] | false;
+      cmd.scheduleEnabled = item["scheduleEnabled"] | false;
+      cmd.scheduleMinute = (item["scheduleMinute"] | static_cast<uint16_t>(7 * 60)) % 1440;
+      cmd.scheduleMode = item["scheduleMode"] | "daily";
+      cmd.dayMask = item["dayMask"] | static_cast<uint8_t>(0b0111110);
+      normalizePresetCommand(cmd);
+      presetCount++;
+    }
+    savePresetLibrary();
+  }
+  saveConfig();
+  sendOk("config imported");
+}
+
+void handleOtaFinish() {
+  bool ok = !Update.hasError();
+  if (ok) {
+    server.send(200, "application/json", "{\"ok\":true,\"message\":\"ota uploaded, restarting\"}");
+    delay(300);
+    ESP.restart();
+  } else {
+    server.send(500, "application/json", "{\"ok\":false,\"message\":\"ota failed\"}");
+  }
+}
+
+void handleOtaUpload() {
+  HTTPUpload &upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    irrecv.disableIRIn();
+    Update.begin(UPDATE_SIZE_UNKNOWN);
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      Update.abort();
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    Update.end(true);
+    irrecv.enableIRIn();
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    Update.abort();
+    irrecv.enableIRIn();
+  }
+}
+
 void setupRoutes() {
   server.on("/", HTTP_GET, []() { server.send_P(200, "text/html; charset=utf-8", kIndexHtml); });
   server.on("/match", HTTP_GET, []() { server.send_P(200, "text/html; charset=utf-8", kMatchHtml); });
@@ -4736,9 +5704,15 @@ void setupRoutes() {
   server.on("/api/live", HTTP_GET, handleLive);
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/temp-history", HTTP_GET, handleTempHistory);
+  server.on("/api/control-events", HTTP_GET, handleControlEvents);
+  server.on("/api/control-log", HTTP_GET, handleControlLog);
   server.on("/api/wifi", HTTP_POST, handleWifiPost);
   server.on("/api/wifi/forget", HTTP_POST, handleWifiForget);
   server.on("/api/ac-config", HTTP_POST, handleAcConfigPost);
+  server.on("/api/settings", HTTP_POST, handleSettingsPost);
+  server.on("/api/config-export", HTTP_GET, handleConfigExport);
+  server.on("/api/config-import", HTTP_POST, handleConfigImport);
+  server.on("/api/ota", HTTP_POST, handleOtaFinish, handleOtaUpload);
   server.on("/api/send-ac", HTTP_POST, handleSendAcPost);
   server.on("/api/remote-state", HTTP_POST, handleRemoteStatePost);
   server.on("/api/create-preset", HTTP_POST, handlePresetCreatePost);
@@ -4766,6 +5740,14 @@ void setupRoutes() {
       handleTempHistory();
       return;
     }
+    if (method == HTTP_GET && uri == "/api/control-events") {
+      handleControlEvents();
+      return;
+    }
+    if (method == HTTP_GET && uri == "/api/control-log") {
+      handleControlLog();
+      return;
+    }
     if (method == HTTP_GET && (uri == "/remote" || uri == "/remote/")) {
       server.send_P(200, "text/html; charset=utf-8", kRemoteHtml);
       return;
@@ -4784,6 +5766,18 @@ void setupRoutes() {
     }
     if (method == HTTP_POST && uri == "/api/ac-config") {
       handleAcConfigPost();
+      return;
+    }
+    if (method == HTTP_POST && uri == "/api/settings") {
+      handleSettingsPost();
+      return;
+    }
+    if (method == HTTP_GET && uri == "/api/config-export") {
+      handleConfigExport();
+      return;
+    }
+    if (method == HTTP_POST && uri == "/api/config-import") {
+      handleConfigImport();
       return;
     }
     if (method == HTTP_POST && uri == "/api/send-ac") {
@@ -4846,6 +5840,7 @@ void setup() {
   LittleFS.begin(true);
   loadConfig();
   loadTempHistory();
+  loadControlEvents();
   loadLearnedLibrary();
   loadPresetLibrary();
 
