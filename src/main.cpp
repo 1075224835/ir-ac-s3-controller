@@ -133,6 +133,7 @@ struct CaptureSnapshot {
 struct TempHistorySample {
   uint32_t minute = 0;
   int16_t temp10 = 0;
+  int16_t humidity10 = INT16_MIN;
 };
 
 struct ControlEvent {
@@ -155,9 +156,9 @@ struct DecisionLogEntry {
   int16_t room10 = INT16_MIN;
   int16_t target10 = INT16_MIN;
   int16_t setpoint10 = INT16_MIN;
-  char action[16] = "";
-  char stage[8] = "";
-  char note[96] = "";
+  char action[24] = "";
+  char stage[12] = "";
+  char note[160] = "";
 };
 
 struct AcRequest {
@@ -211,10 +212,11 @@ ControlEvent controlEvents[kControlEventPoints];
 uint16_t controlEventHead = 0;
 uint16_t controlEventCount = 0;
 bool controlEventsUseEpoch = false;
-constexpr uint8_t kDecisionLogPoints = 64;
+constexpr uint16_t kDecisionLogPoints = 192;
 DecisionLogEntry decisionLog[kDecisionLogPoints];
-uint8_t decisionLogHead = 0;
-uint8_t decisionLogCount = 0;
+uint16_t decisionLogHead = 0;
+uint16_t decisionLogCount = 0;
+bool decisionLogUsesEpoch = false;
 
 WebServer server(80);
 DNSServer dnsServer;
@@ -666,6 +668,28 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       display: grid;
       gap: 12px;
     }
+    .wifi-scan-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .wifi-network {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border-color: var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      text-align: left;
+      box-shadow: var(--shadow-sm);
+    }
+    .wifi-network strong { display: block; overflow-wrap: anywhere; }
+    .wifi-network span { color: var(--muted); font-size: 12px; }
+    .wifi-rssi { color: var(--accent); font-weight: 760; white-space: nowrap; }
     .control-log {
       display: grid;
       gap: 8px;
@@ -737,6 +761,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     .curve-line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
     .curve-fill { fill: rgba(23, 105, 224, 0.12); }
     .history-line { fill: none; stroke: var(--ok); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+    .history-humidity-line { fill: none; stroke: var(--warn); stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
     .history-fill { fill: rgba(11, 143, 85, 0.12); }
     .history-stage { position: relative; cursor: grab; }
     .history-stage.dragging { cursor: grabbing; }
@@ -749,6 +774,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     }
     .history-hover-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; pointer-events: none; }
     .history-hover-dot { fill: var(--panel-strong); stroke: var(--ok); stroke-width: 2; pointer-events: none; }
+    .history-hover-dot.humidity { stroke: var(--warn); }
     .history-tooltip {
       position: absolute;
       z-index: 3;
@@ -1106,10 +1132,28 @@ const char kIndexHtml[] PROGMEM = R"HTML(
   <section>
     <div class="section-head">
       <div>
-        <h2>自动控制决策日志</h2>
-        <div class="subhead">记录每一次曲线控制为什么发送、跳过或结束，便于夜间回归测试。</div>
+        <h2>控制事件日志</h2>
+        <div class="subhead">记录自动曲线、湿度控制、手动、快捷和定时指令，可按来源和类型筛选。</div>
       </div>
       <div class="header-links"><div class="badge" id="controlLogBadge">等待数据</div><button class="secondary" type="button" onclick="refreshControlLog()">刷新</button></div>
+    </div>
+    <div class="form-grid compact">
+      <label>事件来源<select id="controlLogSourceFilter" onchange="renderControlLog(); renderTempHistory()">
+        <option value="all">全部</option>
+        <option value="auto">自动曲线</option>
+        <option value="humidity">湿度</option>
+        <option value="manual">手动</option>
+        <option value="preset_schedule">快捷/定时</option>
+        <option value="system">结束/系统</option>
+      </select></label>
+      <label>事件类型<select id="controlLogTypeFilter" onchange="renderControlLog(); renderTempHistory()">
+        <option value="all">全部</option>
+        <option value="sent">发送</option>
+        <option value="queue">排队</option>
+        <option value="skip">跳过</option>
+        <option value="end">结束</option>
+        <option value="failed">失败</option>
+      </select></label>
     </div>
     <div class="control-log" id="controlLog"><div class="empty">暂无决策日志</div></div>
   </section>
@@ -1126,8 +1170,10 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       <label>WiFi 名称<input id="staSsid" autocomplete="off"></label>
       <label>WiFi 密码<input id="staPassword" type="password" autocomplete="new-password" placeholder="不修改密码可留空"></label>
     </div>
+    <div class="wifi-scan-list" id="wifiScanList"></div>
     <div class="actions">
       <button onclick="saveWifi()">保存并连接</button>
+      <button class="secondary" id="wifiScanButton" onclick="scanWifiNetworks()">扫描热点</button>
       <button class="secondary" onclick="forgetWifi()">忘记 WiFi</button>
     </div>
     <small>设备热点：IR-AC-S3，密码：12345678。当前主机名：ir-ac-s3。</small>
@@ -1141,10 +1187,11 @@ const $ = id => document.getElementById(id);
 const dirty = new Set();
 const guardedIds = ['staSsid','staPassword','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan','autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve','sensorTempOffset','sensorHumidityOffset','humidityControlEnabled','targetHumidity','humidityDeadband','humidityTargetTemp','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'];
 const curveView = {w:720, h:280, l:44, r:14, t:10, b:30};
-const historyView = {w:720, h:260, l:50, r:18, t:18, b:38};
+const historyView = {w:720, h:260, l:50, r:52, t:18, b:38};
 let tempHistoryRefreshInFlight = false;
 let controlLogRefreshInFlight = false;
 const tempHistoryState = {samples:[], events:[], usesEpoch:false, eventsUseEpoch:false, start:null, end:null, minTemp:0, maxTemp:0, followLatest:true, hover:null};
+const controlLogState = {logs:[], usesEpoch:false};
 const tempHistoryPinch = {active:false, startDistance:0, startSpan:0, anchor:0, ratio:0.5};
 const tempHistoryDrag = {active:false, pointerId:null, startClientX:0, startSvgX:0, startStart:0, startEnd:0, moved:false};
 let curveRenderRange = null;
@@ -1186,7 +1233,8 @@ const segmentedSelectIds = [
   'power','mode','fan','specialMode','swingV','swingH','filterFlag',
   'learnPower','learnMode','learnFan',
   'autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled',
-  'humidityControlEnabled','predictiveSkipEnabled','adaptiveControlEnabled','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'
+  'humidityControlEnabled','predictiveSkipEnabled','adaptiveControlEnabled','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter',
+  'controlLogSourceFilter','controlLogTypeFilter'
 ];
 function syncSegmentedControl(id){
   const select = $(id);
@@ -1215,11 +1263,15 @@ function enhanceSegmentedControls(){
       btn.textContent = opt.label;
       btn.addEventListener('click', () => {
         select.value = opt.value;
-        dirty.add(id);
+        if (!id.startsWith('controlLog')) dirty.add(id);
         select.dispatchEvent(new Event('input', {bubbles:true}));
         select.dispatchEvent(new Event('change', {bubbles:true}));
         syncSegmentedControl(id);
         if (id === 'autoMode' || id === 'curveControlMode') renderCurve();
+        if (id.startsWith('controlLog')) {
+          renderControlLog();
+          renderTempHistory();
+        }
       });
       group.appendChild(btn);
     });
@@ -1238,13 +1290,13 @@ function ensureTempHistorySection(){
     <section>
       <div class="section-head">
         <div>
-          <h2>72小时室温曲线</h2>
-          <div class="subhead">每分钟记录一次自身传感器室温，用来检查实际室温是否贴近睡眠曲线。</div>
+          <h2>72小时温湿度曲线</h2>
+          <div class="subhead">每分钟记录一次自身传感器温湿度，用来检查实际环境是否贴近睡眠曲线。</div>
         </div>
         <div class="header-links"><div class="badge" id="tempHistoryBadge">等待数据</div><button class="secondary" type="button" onclick="refreshTempHistory()">刷新</button></div>
       </div>
       <div class="curve-stage history-stage" id="tempHistoryStage">
-        <svg id="tempHistorySvg" viewBox="0 0 720 260" role="img" aria-label="72小时室温曲线"></svg>
+        <svg id="tempHistorySvg" viewBox="0 0 720 260" role="img" aria-label="72小时温湿度曲线"></svg>
         <div class="history-tooltip" id="tempHistoryTip"></div>
       </div>
       <div class="label" id="tempHistoryInfo" style="margin-top:10px">暂无记录</div>
@@ -1325,6 +1377,59 @@ function historyY(temp, minTemp, maxTemp){
   const plotH = historyView.h - historyView.t - historyView.b;
   return historyView.t + (maxTemp - temp) / Math.max(1, maxTemp - minTemp) * plotH;
 }
+function logSource(item){
+  const stage = String(item?.source || item?.stage || '').toLowerCase();
+  if (['auto','curve','fast','quiet'].includes(stage)) return 'auto';
+  if (stage === 'humidity') return 'humidity';
+  if (stage === 'manual') return 'manual';
+  if (stage === 'preset' || stage === 'schedule') return 'preset_schedule';
+  if (stage === 'end' || stage === 'system') return 'system';
+  return stage || 'system';
+}
+function logType(item){
+  const action = String(item?.action || '').toLowerCase();
+  if (action.startsWith('skip')) return 'skip';
+  if (action.startsWith('queue') || action === 'humidity_off') return 'queue';
+  if (action.startsWith('sent')) return 'sent';
+  if (action.includes('failed')) return 'failed';
+  if (action.startsWith('end')) return 'end';
+  return 'sent';
+}
+function logSourceText(source){
+  return {auto:'自动曲线', humidity:'湿度', manual:'手动', preset_schedule:'快捷/定时', system:'结束/系统'}[source] || source || '事件';
+}
+function logTypeText(type){
+  return {sent:'发送', queue:'排队', skip:'跳过', end:'结束', failed:'失败'}[type] || type || '事件';
+}
+function filteredControlLogs(logs=controlLogState.logs){
+  const source = $('controlLogSourceFilter')?.value || 'all';
+  const type = $('controlLogTypeFilter')?.value || 'all';
+  return (logs || []).filter(item => {
+    if (source !== 'all' && logSource(item) !== source) return false;
+    if (type !== 'all' && logType(item) !== type) return false;
+    return true;
+  });
+}
+function linePath(points, valueKey, minValue, maxValue){
+  let path = '';
+  let open = false;
+  points.forEach(p => {
+    const value = Number(p[valueKey]);
+    if (!Number.isFinite(value)) {
+      open = false;
+      return;
+    }
+    path += `${open ? 'L' : 'M'} ${historyX(p.minute, tempHistoryState.start, tempHistoryState.end).toFixed(1)} ${historyY(value, minValue, maxValue).toFixed(1)} `;
+    open = true;
+  });
+  return path.trim();
+}
+function historyTicks(min, max, count=5){
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
+  const ticks = [];
+  for (let i = 0; i < count; i++) ticks.push(min + (max - min) * i / Math.max(1, count - 1));
+  return ticks;
+}
 function historySvgPointFromClient(clientX, clientY=0){
   const svg = $('tempHistorySvg');
   if (!svg) return {x: historyView.l + (historyView.w - historyView.l - historyView.r) / 2, y: historyView.t};
@@ -1357,19 +1462,22 @@ function renderTempHistory(data=null){
   if (!svg) return;
   if (data) {
     tempHistoryState.samples = (Array.isArray(data.samples) ? data.samples : [])
-      .map(p => ({minute:Number(p.minute), temp:Number(p.temp)}))
+      .map(p => {
+        const humidity = Number(p.humidity);
+        return {minute:Number(p.minute), temp:Number(p.temp), humidity:Number.isFinite(humidity) ? humidity : null};
+      })
       .filter(p => Number.isFinite(p.minute) && Number.isFinite(p.temp));
     tempHistoryState.usesEpoch = !!data.usesEpoch;
     if (Array.isArray(data.events)) {
       tempHistoryState.events = data.events
-        .map(e => ({minute:Number(e.minute), source:e.source, action:e.action, mode:e.mode, fan:e.fan, setpoint:Number(e.setpoint), target:Number(e.target), room:Number(e.room), power:!!e.power, turbo:!!e.turbo, quiet:!!e.quiet, sleep:!!e.sleep}))
+        .map(e => ({minute:Number(e.minute), source:e.source, stage:e.stage, action:e.action, note:e.note, mode:e.mode, fan:e.fan, setpoint:Number(e.setpoint), target:Number(e.target), room:Number(e.room), power:!!e.power, turbo:!!e.turbo, quiet:!!e.quiet, sleep:!!e.sleep}))
         .filter(e => Number.isFinite(e.minute));
       tempHistoryState.eventsUseEpoch = !!data.eventsUseEpoch;
     }
   }
   const samples = tempHistoryState.samples;
   if (!samples.length) {
-    svg.innerHTML = '<text x="360" y="130" text-anchor="middle" class="curve-label">暂无室温记录，运行满1分钟后会出现第一个点</text>';
+    svg.innerHTML = '<text x="360" y="130" text-anchor="middle" class="curve-label">暂无温湿度记录，运行满1分钟后会出现第一个点</text>';
     if ($('tempHistoryBadge')) $('tempHistoryBadge').textContent = '0 / 4320 点';
     if ($('tempHistoryInfo')) $('tempHistoryInfo').textContent = '历史记录已持久化保存；滚轮缩放横轴，拖动可左右平移。';
     return;
@@ -1391,57 +1499,77 @@ function renderTempHistory(data=null){
   const visible = samples.filter(p => p.minute >= start && p.minute <= end);
   const viewSamples = visible.length ? visible : samples.slice(-1);
   const temps = viewSamples.map(p => p.temp);
+  const humidities = viewSamples.map(p => Number(p.humidity)).filter(Number.isFinite);
   let minTemp = Math.floor(Math.min(...temps) - 1);
   let maxTemp = Math.ceil(Math.max(...temps) + 1);
   minTemp = clamp(minTemp, 10, 40);
   maxTemp = clamp(maxTemp, minTemp + 2, 45);
+  let minHumidity = humidities.length ? Math.floor(Math.min(...humidities) - 5) : 0;
+  let maxHumidity = humidities.length ? Math.ceil(Math.max(...humidities) + 5) : 100;
+  minHumidity = clamp(minHumidity, 0, 95);
+  maxHumidity = clamp(maxHumidity, minHumidity + 10, 100);
   tempHistoryState.minTemp = minTemp;
   tempHistoryState.maxTemp = maxTemp;
 
   const baseY = historyView.h - historyView.b;
-  const path = visible.map((p, i) => `${i ? 'L' : 'M'} ${historyX(p.minute, start, end).toFixed(1)} ${historyY(p.temp, minTemp, maxTemp).toFixed(1)}`).join(' ');
+  const path = linePath(visible, 'temp', minTemp, maxTemp);
+  const humidityPath = linePath(visible, 'humidity', minHumidity, maxHumidity);
   const fill = path ? `${path} L ${historyX(visible[visible.length - 1].minute, start, end).toFixed(1)} ${baseY} L ${historyX(visible[0].minute, start, end).toFixed(1)} ${baseY} Z` : '';
   const xTicks = [0, 0.25, 0.5, 0.75, 1].map(v => Math.round(start + (end - start) * v));
   const yTicks = [];
   for (let t = Math.ceil(minTemp); t <= Math.floor(maxTemp); t++) yTicks.push(t);
+  const humidityTicks = historyTicks(minHumidity, maxHumidity, 5);
   const grid = [
     ...xTicks.map(m => `<line class="curve-grid" x1="${historyX(m,start,end).toFixed(1)}" y1="${historyView.t}" x2="${historyX(m,start,end).toFixed(1)}" y2="${baseY}"></line><text class="curve-label" x="${historyX(m,start,end).toFixed(1)}" y="${historyView.h - 12}" text-anchor="middle">${formatHistoryLabel(m, tempHistoryState.usesEpoch, latest)}</text>`),
-    ...yTicks.map(t => `<line class="curve-grid" x1="${historyView.l}" y1="${historyY(t,minTemp,maxTemp).toFixed(1)}" x2="${historyView.w - historyView.r}" y2="${historyY(t,minTemp,maxTemp).toFixed(1)}"></line><text class="curve-label" x="8" y="${(historyY(t,minTemp,maxTemp) + 4).toFixed(1)}">${t}℃</text>`)
+    ...yTicks.map(t => `<line class="curve-grid" x1="${historyView.l}" y1="${historyY(t,minTemp,maxTemp).toFixed(1)}" x2="${historyView.w - historyView.r}" y2="${historyY(t,minTemp,maxTemp).toFixed(1)}"></line><text class="curve-label" x="8" y="${(historyY(t,minTemp,maxTemp) + 4).toFixed(1)}">${t}℃</text>`),
+    ...humidityTicks.map(h => `<text class="curve-label" x="${historyView.w - 8}" y="${(historyY(h,minHumidity,maxHumidity) + 4).toFixed(1)}" text-anchor="end">${Math.round(h)}%</text>`)
   ].join('');
   const last = samples[samples.length - 1];
   let hover = '';
   if (tempHistoryState.hover && tempHistoryState.hover.minute >= start && tempHistoryState.hover.minute <= end) {
     const hx = historyX(tempHistoryState.hover.minute, start, end).toFixed(1);
     const hy = historyY(tempHistoryState.hover.temp, minTemp, maxTemp).toFixed(1);
-    hover = `<line class="history-hover-line" x1="${hx}" y1="${historyView.t}" x2="${hx}" y2="${baseY}"></line><circle class="history-hover-dot" cx="${hx}" cy="${hy}" r="5"></circle>`;
+    const hh = Number(tempHistoryState.hover.humidity);
+    const humidityDot = Number.isFinite(hh)
+      ? `<circle class="history-hover-dot humidity" cx="${hx}" cy="${historyY(hh, minHumidity, maxHumidity).toFixed(1)}" r="4.5"></circle>`
+      : '';
+    hover = `<line class="history-hover-line" x1="${hx}" y1="${historyView.t}" x2="${hx}" y2="${baseY}"></line><circle class="history-hover-dot" cx="${hx}" cy="${hy}" r="5"></circle>${humidityDot}`;
   }
-  const lastNode = last.minute >= start && last.minute <= end
-    ? `<circle cx="${historyX(last.minute,start,end).toFixed(1)}" cy="${historyY(last.temp,minTemp,maxTemp).toFixed(1)}" r="5" fill="var(--ok)"></circle>`
-    : '';
+  let lastNode = '';
+  if (last.minute >= start && last.minute <= end) {
+    const lx = historyX(last.minute,start,end).toFixed(1);
+    lastNode = `<circle cx="${lx}" cy="${historyY(last.temp,minTemp,maxTemp).toFixed(1)}" r="5" fill="var(--ok)"></circle>`;
+    if (Number.isFinite(Number(last.humidity))) lastNode += `<circle cx="${lx}" cy="${historyY(Number(last.humidity),minHumidity,maxHumidity).toFixed(1)}" r="4.5" fill="var(--warn)"></circle>`;
+  }
   const eventMarkers = tempHistoryState.eventsUseEpoch === tempHistoryState.usesEpoch
-    ? tempHistoryState.events.filter(e => e.minute >= start && e.minute <= end).map(e => {
+    ? filteredControlLogs(tempHistoryState.events).filter(e => e.minute >= start && e.minute <= end).map(e => {
       const x = historyX(e.minute, start, end).toFixed(1);
       return `<line class="history-event-line" x1="${x}" y1="${historyView.t}" x2="${x}" y2="${baseY}"></line><circle class="history-event-dot" cx="${x}" cy="${historyView.t + 10}" r="4"></circle>`;
     }).join('')
     : '';
-  svg.innerHTML = `${grid}<line class="curve-axis" x1="${historyView.l}" y1="${baseY}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.l}" y1="${historyView.t}" x2="${historyView.l}" y2="${baseY}"></line>${fill ? `<path class="history-fill" d="${fill}"></path><path class="history-line" d="${path}"></path>` : ''}${eventMarkers}${lastNode}${hover}`;
+  const legend = `<text class="curve-label" x="${historyView.l}" y="12" style="fill:var(--ok)">室温 ℃</text><text class="curve-label" x="${historyView.w - historyView.r}" y="12" text-anchor="end" style="fill:var(--warn)">湿度 %</text>`;
+  svg.innerHTML = `${grid}${legend}<line class="curve-axis" x1="${historyView.l}" y1="${baseY}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.l}" y1="${historyView.t}" x2="${historyView.l}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.w - historyView.r}" y1="${historyView.t}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line>${fill ? `<path class="history-fill" d="${fill}"></path><path class="history-line" d="${path}"></path>` : ''}${humidityPath ? `<path class="history-humidity-line" d="${humidityPath}"></path>` : ''}${eventMarkers}${lastNode}${hover}`;
   if ($('tempHistoryBadge')) $('tempHistoryBadge').textContent = `${samples.length} / 4320 点`;
   if ($('tempHistoryInfo')) {
     const spanHours = Math.max(1, Math.round((end - start) / 60));
-    $('tempHistoryInfo').textContent = `最近 ${last.temp.toFixed(1)} ℃，当前视窗约 ${spanHours} 小时；滚轮缩放，拖动平移，悬停查看时间和温度。`;
+    const lastHumidity = Number(last.humidity);
+    const humidityText = Number.isFinite(lastHumidity) ? ` / ${lastHumidity.toFixed(0)}%` : '';
+    $('tempHistoryInfo').textContent = `最近 ${last.temp.toFixed(1)} ℃${humidityText}，当前视窗约 ${spanHours} 小时；滚轮缩放，拖动平移，悬停查看时间、温度和湿度。`;
   }
 }
 async function refreshTempHistory(){
   if (tempHistoryRefreshInFlight || !$('tempHistorySvg')) return;
   tempHistoryRefreshInFlight = true;
   try {
-    const [historyRes, eventsRes] = await Promise.all([fetch('/api/temp-history'), fetch('/api/control-events')]);
+    const [historyRes, eventsRes] = await Promise.all([fetch('/api/temp-history'), fetch('/api/control-log')]);
     if (!historyRes.ok) throw new Error(await historyRes.text());
     const history = await historyRes.json();
     if (eventsRes.ok) {
       const eventData = await eventsRes.json();
-      history.events = eventData.events || [];
+      history.events = eventData.logs || [];
       history.eventsUseEpoch = !!eventData.usesEpoch;
+      controlLogState.logs = eventData.logs || [];
+      controlLogState.usesEpoch = !!eventData.usesEpoch;
     }
     renderTempHistory(history);
   } catch(e) {
@@ -1474,7 +1602,7 @@ function nearestHistoryEvent(minute){
   const tolerance = Math.max(2, span / 120);
   let best = null;
   let bestDist = Infinity;
-  tempHistoryState.events.forEach(e => {
+  filteredControlLogs(tempHistoryState.events).forEach(e => {
     if (e.minute < tempHistoryState.start || e.minute > tempHistoryState.end) return;
     const dist = Math.abs(e.minute - minute);
     if (dist < bestDist) { bestDist = dist; best = e; }
@@ -1483,12 +1611,12 @@ function nearestHistoryEvent(minute){
 }
 function historyEventText(event){
   if (!event) return '';
-  const sourceText = {auto:'曲线', manual:'手动', preset:'快捷', schedule:'定时'}[event.source] || event.source || '事件';
-  const actionText = {send:'发送', failed:'失败', end_poweroff:'结束关机'}[event.action] || event.action || '事件';
+  const sourceText = logSourceText(logSource(event));
+  const action = actionText(event.action);
   const setpoint = Number.isFinite(event.setpoint) ? ` · 设定 ${event.setpoint.toFixed(1)}℃` : '';
   const mode = modeText[event.mode] || event.mode || '--';
   const fan = fanText[event.fan] || event.fan || '--';
-  return `<span>${sourceText}${actionText} · ${mode}/${fan}${setpoint}</span>`;
+  return `<span>${sourceText} · ${action} · ${mode}/${fan}${setpoint}</span>`;
 }
 function showTempHistoryTooltipAt(clientX, clientY){
   const tip = $('tempHistoryTip');
@@ -1504,7 +1632,9 @@ function showTempHistoryTooltipAt(clientX, clientY){
   tip.style.top = y + 'px';
   tip.style.display = 'block';
   const event = nearestHistoryEvent(point.minute);
-  tip.innerHTML = `<strong>${point.temp.toFixed(1)} ℃</strong><span>${formatHistoryLabel(point.minute, tempHistoryState.usesEpoch, tempHistoryState.samples[tempHistoryState.samples.length - 1]?.minute || point.minute)}</span>${historyEventText(event)}`;
+  const humidity = Number(point.humidity);
+  const humidityText = Number.isFinite(humidity) ? ` · ${humidity.toFixed(0)}%` : '';
+  tip.innerHTML = `<strong>${point.temp.toFixed(1)} ℃${humidityText}</strong><span>${formatHistoryLabel(point.minute, tempHistoryState.usesEpoch, tempHistoryState.samples[tempHistoryState.samples.length - 1]?.minute || point.minute)}</span>${historyEventText(event)}`;
 }
 function showTempHistoryTooltip(evt){
   if (tempHistoryDrag.active) return;
@@ -2161,23 +2291,57 @@ function formatLogMinute(minute){
   }
   return `+${minute}分`;
 }
-function renderControlLog(logs){
+function actionText(action){
+  return {
+    sent:'已发送',
+    sent_raw:'已发送学习码',
+    failed:'发送失败',
+    queue_send:'已排队发送',
+    queue_dehumidify:'已排队除湿',
+    humidity_off:'湿控关闭关机',
+    skip_sensor:'等待传感器',
+    skip_humidity_sensor:'等待湿度',
+    skip_dehumidify_cold:'暂停除湿',
+    skip_humidity_ok:'湿度已稳定',
+    skip_deadband:'死区内跳过',
+    skip_predict:'趋势预测跳过',
+    skip_delta:'发送过滤跳过',
+    end_poweroff:'结束关机',
+    end_hold:'结束保持'
+  }[action] || action || '事件';
+}
+function stageText(stage){
+  return {fast:'急速', quiet:'安静', curve:'曲线', humidity:'湿度', auto:'自动', manual:'手动', preset:'快捷', schedule:'定时', end:'结束'}[stage] || stage || '--';
+}
+function renderControlLog(logs=null){
   const box = $('controlLog');
   if (!box) return;
-  if (!logs || !logs.length) {
-    box.innerHTML = '<div class="empty">暂无决策日志</div>';
+  if (Array.isArray(logs)) controlLogState.logs = logs;
+  const allLogs = controlLogState.logs || [];
+  const filtered = filteredControlLogs(allLogs);
+  if (!allLogs.length) {
+    box.innerHTML = '<div class="empty">暂无控制事件</div>';
     if ($('controlLogBadge')) $('controlLogBadge').textContent = '0 条';
     return;
   }
-  box.innerHTML = logs.slice().reverse().map(item => {
+  if (!filtered.length) {
+    box.innerHTML = '<div class="empty">当前筛选下暂无事件</div>';
+    if ($('controlLogBadge')) $('controlLogBadge').textContent = `0 / ${allLogs.length} 条`;
+    return;
+  }
+  box.innerHTML = filtered.slice().reverse().map(item => {
     const temps = [
       Number.isFinite(Number(item.room)) ? `室温 ${Number(item.room).toFixed(1)}℃` : '',
       Number.isFinite(Number(item.target)) ? `目标 ${Number(item.target).toFixed(1)}℃` : '',
       Number.isFinite(Number(item.setpoint)) ? `设定 ${Number(item.setpoint).toFixed(1)}℃` : ''
     ].filter(Boolean).join(' · ');
-    return `<div class="log-item"><strong>${formatLogMinute(item.minute)}</strong><div>${esc(item.action || '')} / ${esc(item.stage || '')}<br><span class="label">${esc(temps || '--')}</span><br>${esc(item.note || '')}</div></div>`;
+    const source = logSource(item);
+    const type = logType(item);
+    const head = `${logSourceText(source)} · ${logTypeText(type)} · ${actionText(item.action)}`;
+    const stage = stageText(item.stage || item.source);
+    return `<div class="log-item"><strong>${formatLogMinute(item.minute)}</strong><div>${esc(head)}<br><span class="label">${esc(stage)} · ${esc(temps || '--')}</span><br>${esc(item.note || '')}</div></div>`;
   }).join('');
-  if ($('controlLogBadge')) $('controlLogBadge').textContent = `${logs.length} 条`;
+  if ($('controlLogBadge')) $('controlLogBadge').textContent = `${filtered.length} / ${allLogs.length} 条`;
 }
 async function refreshControlLog(){
   if (controlLogRefreshInFlight || !$('controlLog')) return;
@@ -2186,7 +2350,11 @@ async function refreshControlLog(){
     const r = await fetch('/api/control-log');
     if (!r.ok) throw new Error(await r.text());
     const data = await r.json();
+    controlLogState.usesEpoch = !!data.usesEpoch;
+    tempHistoryState.events = data.logs || [];
+    tempHistoryState.eventsUseEpoch = !!data.usesEpoch;
     renderControlLog(data.logs || []);
+    renderTempHistory();
   } catch(e) {
     if ($('controlLog')) $('controlLog').innerHTML = `<div class="empty">${esc(e.message || '日志读取失败')}</div>`;
   } finally {
@@ -2409,6 +2577,58 @@ async function saveWifi(){
     await post('/api/wifi', {ssid:$('staSsid').value, password:$('staPassword').value}, 'WiFi 已保存，正在连接...', ['staSsid','staPassword']);
     $('staPassword').value = '';
   } catch(e) { msg(e.message || 'WiFi 保存失败', true); }
+}
+function wifiSignalText(rssi){
+  rssi = Number(rssi);
+  if (!Number.isFinite(rssi)) return '--';
+  if (rssi >= -55) return '很强';
+  if (rssi >= -67) return '较强';
+  if (rssi >= -75) return '一般';
+  return '较弱';
+}
+function renderWifiScan(networks){
+  const box = $('wifiScanList');
+  if (!box) return;
+  if (!networks || !networks.length) {
+    box.innerHTML = '<div class="empty">没有扫描到热点</div>';
+    return;
+  }
+  box.innerHTML = networks.map((n, idx) => `
+    <button class="wifi-network" type="button" data-wifi-index="${idx}">
+      <div><strong>${esc(n.ssid || '隐藏网络')}</strong><span>${esc(n.auth || (n.open ? '开放' : '加密'))} · CH ${Number(n.channel || 0)} · ${Number(n.rssi || 0)} dBm</span></div>
+      <div class="wifi-rssi">${wifiSignalText(n.rssi)}</div>
+    </button>
+  `).join('');
+  box.querySelectorAll('[data-wifi-index]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = networks[Number(btn.dataset.wifiIndex)];
+      if (!item || !item.ssid) return;
+      $('staSsid').value = item.ssid;
+      dirty.add('staSsid');
+      $('staSsid').dispatchEvent(new Event('input', {bubbles:true}));
+      $('staPassword')?.focus();
+      msg(`已选择热点：${item.ssid}`);
+    });
+  });
+}
+async function scanWifiNetworks(){
+  const btn = $('wifiScanButton');
+  const box = $('wifiScanList');
+  try {
+    if (btn) btn.disabled = true;
+    if (box) box.innerHTML = '<div class="empty">正在扫描附近热点...</div>';
+    const r = await fetch('/api/wifi-scan');
+    const text = await r.text();
+    if (!r.ok) throw new Error(text || '扫描失败');
+    const data = JSON.parse(text);
+    renderWifiScan(data.networks || []);
+    msg(`扫描完成：${data.count || 0} 个热点`);
+  } catch(e) {
+    if (box) box.innerHTML = `<div class="empty">${esc(e.message || '热点扫描失败')}</div>`;
+    msg(e.message || '热点扫描失败', true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 async function forgetWifi(){
   try {
@@ -3821,9 +4041,10 @@ bool writeJsonFile(const char *path, JsonDocument &doc) {
   return ok;
 }
 
-void appendTempHistorySample(uint32_t minute, int16_t temp10, bool markDirty) {
+void appendTempHistorySample(uint32_t minute, int16_t temp10, int16_t humidity10, bool markDirty) {
   tempHistory[tempHistoryHead].minute = minute;
   tempHistory[tempHistoryHead].temp10 = temp10;
+  tempHistory[tempHistoryHead].humidity10 = humidity10;
   tempHistoryHead = (tempHistoryHead + 1) % kTempHistoryPoints;
   if (tempHistoryCount < kTempHistoryPoints) tempHistoryCount++;
   lastHistoryMinute = minute;
@@ -3845,12 +4066,13 @@ bool saveTempHistory() {
   File file = LittleFS.open(kTempHistoryPath, "w");
   if (!file) return false;
 
-  file.printf("TH1,%u,%u\n", tempHistoryUsesEpoch ? 1 : 0, tempHistoryCount);
+  file.printf("TH2,%u,%u\n", tempHistoryUsesEpoch ? 1 : 0, tempHistoryCount);
   for (uint16_t i = 0; i < tempHistoryCount; i++) {
     uint16_t idx = (tempHistoryHead + kTempHistoryPoints - tempHistoryCount + i) % kTempHistoryPoints;
-    file.printf("%lu,%d\n",
+    file.printf("%lu,%d,%d\n",
                 static_cast<unsigned long>(tempHistory[idx].minute),
-                static_cast<int>(tempHistory[idx].temp10));
+                static_cast<int>(tempHistory[idx].temp10),
+                static_cast<int>(tempHistory[idx].humidity10));
   }
 
   bool ok = file.getWriteError() == 0;
@@ -3863,12 +4085,15 @@ bool saveTempHistory() {
   return ok;
 }
 
-bool appendTempHistoryToFile(uint32_t minute, int16_t temp10) {
+bool appendTempHistoryToFile(uint32_t minute, int16_t temp10, int16_t humidity10) {
   bool create = !LittleFS.exists(kTempHistoryPath);
   File file = LittleFS.open(kTempHistoryPath, create ? "w" : "a");
   if (!file) return false;
-  if (create) file.printf("TH1,%u,0\n", tempHistoryUsesEpoch ? 1 : 0);
-  file.printf("%lu,%d\n", static_cast<unsigned long>(minute), static_cast<int>(temp10));
+  if (create) file.printf("TH2,%u,0\n", tempHistoryUsesEpoch ? 1 : 0);
+  file.printf("%lu,%d,%d\n",
+              static_cast<unsigned long>(minute),
+              static_cast<int>(temp10),
+              static_cast<int>(humidity10));
   bool ok = file.getWriteError() == 0;
   file.close();
   if (ok) {
@@ -3894,14 +4119,17 @@ void loadTempHistory() {
 
   String header = file.readStringUntil('\n');
   header.trim();
+  unsigned int version = 0;
   unsigned int usesEpoch = 0;
   unsigned int count = 0;
-  if (sscanf(header.c_str(), "TH1,%u,%u", &usesEpoch, &count) != 2) {
+  if (sscanf(header.c_str(), "TH%u,%u,%u", &version, &usesEpoch, &count) != 3 ||
+      (version != 1 && version != 2)) {
     file.close();
     lastTempHistorySaveMs = millis();
     return;
   }
   tempHistoryUsesEpoch = usesEpoch != 0;
+  bool needsUpgrade = version < 2;
 
   while (file.available() && tempHistoryCount < kTempHistoryPoints) {
     String line = file.readStringUntil('\n');
@@ -3909,14 +4137,22 @@ void loadTempHistory() {
     if (!line.length()) continue;
     unsigned long minute = 0;
     int temp10 = 0;
-    if (sscanf(line.c_str(), "%lu,%d", &minute, &temp10) == 2) {
-      appendTempHistorySample(static_cast<uint32_t>(minute), static_cast<int16_t>(temp10), false);
+    int humidity10 = INT16_MIN;
+    int matched = sscanf(line.c_str(), "%lu,%d,%d", &minute, &temp10, &humidity10);
+    if (matched >= 2) {
+      if (matched < 3) humidity10 = INT16_MIN;
+      appendTempHistorySample(static_cast<uint32_t>(minute),
+                              static_cast<int16_t>(temp10),
+                              static_cast<int16_t>(humidity10),
+                              false);
+      if (matched < 3) needsUpgrade = true;
     }
   }
   file.close();
   tempHistoryDirty = false;
   unsavedTempHistorySamples = 0;
   lastTempHistorySaveMs = millis();
+  if (needsUpgrade) saveTempHistory();
 }
 
 void maintainTempHistoryPersistence() {
@@ -4253,6 +4489,35 @@ void sendError(uint16_t code, const String &message) {
   server.send(code, "application/json", out);
 }
 
+String jsonString(const String &value) {
+  String out;
+  out.reserve(value.length() + 8);
+  out += '"';
+  for (size_t i = 0; i < value.length(); i++) {
+    char c = value[i];
+    switch (c) {
+      case '"': out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\b': out += "\\b"; break;
+      case '\f': out += "\\f"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default:
+        if (static_cast<uint8_t>(c) < 0x20) {
+          char buffer[7];
+          snprintf(buffer, sizeof(buffer), "\\u%04x", static_cast<uint8_t>(c));
+          out += buffer;
+        } else {
+          out += c;
+        }
+        break;
+    }
+  }
+  out += '"';
+  return out;
+}
+
 bool useDefaultStaticIp() {
   return config.staSsid == kDefaultWifiSsid && strlen(kDefaultWifiStaticIp) > 0;
 }
@@ -4403,6 +4668,11 @@ void appendControlEventMemory(const ControlEvent &event) {
   if (controlEventCount < kControlEventPoints) controlEventCount++;
 }
 
+void clearDecisionLog() {
+  decisionLogHead = 0;
+  decisionLogCount = 0;
+}
+
 bool saveControlEvents() {
   File file = LittleFS.open(kControlEventsPath, "w");
   if (!file) return false;
@@ -4494,8 +4764,23 @@ void loadControlEvents() {
 
 void addDecisionLog(const char *action, const char *stage, const char *note,
                     float room, float target, float setpoint) {
+  bool usesEpoch = false;
+  uint32_t minute = currentHistoryMinute(&usesEpoch);
+  if (decisionLogCount > 0 && usesEpoch != decisionLogUsesEpoch) {
+    clearDecisionLog();
+  }
+  decisionLogUsesEpoch = usesEpoch;
+  if (decisionLogCount > 0 && action != nullptr && strncmp(action, "skip_", 5) == 0) {
+    uint16_t lastIdx = (decisionLogHead + kDecisionLogPoints - 1) % kDecisionLogPoints;
+    const DecisionLogEntry &last = decisionLog[lastIdx];
+    if (last.minute == minute &&
+        strncmp(last.action, action == nullptr ? "" : action, sizeof(last.action)) == 0 &&
+        strncmp(last.stage, stage == nullptr ? "" : stage, sizeof(last.stage)) == 0) {
+      return;
+    }
+  }
   DecisionLogEntry &entry = decisionLog[decisionLogHead];
-  entry.minute = currentHistoryMinute();
+  entry.minute = minute;
   entry.room10 = tempToTenths(room);
   entry.target10 = tempToTenths(target);
   entry.setpoint10 = tempToTenths(setpoint);
@@ -4593,8 +4878,9 @@ void recordTemperatureHistory() {
   if (minute == lastHistoryMinute) return;
 
   int16_t temp10 = static_cast<int16_t>(roundf(roomTempC * 10.0f));
-  appendTempHistorySample(minute, temp10, false);
-  appendTempHistoryToFile(minute, temp10);
+  int16_t humidity10 = tempToTenths(roomHumidity);
+  appendTempHistorySample(minute, temp10, humidity10, false);
+  appendTempHistoryToFile(minute, temp10, humidity10);
 }
 
 void updateSensor() {
@@ -4939,6 +5225,7 @@ void runAutoControl() {
 
   if (isnan(roomTempC)) {
     addDecisionLog("skip_sensor", curveActive ? "curve" : "humidity", "等待 SHT31 室温读数", roomTempC, NAN, NAN);
+    lastControlMs = millis();
     return;
   }
   if (millis() - lastControlMs < static_cast<uint32_t>(config.controlIntervalSec) * 1000UL) return;
@@ -5196,14 +5483,21 @@ void handleTempHistory() {
   for (uint16_t i = 0; i < tempHistoryCount; i++) {
     uint16_t idx = (tempHistoryHead + kTempHistoryPoints - tempHistoryCount + i) % kTempHistoryPoints;
     if (i > 0) server.sendContent(",");
-    char buffer[48];
-    snprintf(buffer, sizeof(buffer), "{\"minute\":%lu,\"temp\":%.1f}",
+    char buffer[72];
+    snprintf(buffer, sizeof(buffer), "{\"minute\":%lu,\"temp\":%.1f,\"humidity\":",
              static_cast<unsigned long>(tempHistory[idx].minute),
              tempHistory[idx].temp10 / 10.0f);
     server.sendContent(buffer);
+    if (tempHistory[idx].humidity10 == INT16_MIN) {
+      server.sendContent("null");
+    } else {
+      server.sendContent(String(tempHistory[idx].humidity10 / 10.0f, 1));
+    }
+    server.sendContent("}");
   }
 
   server.sendContent("]}");
+  server.sendContent("");
 }
 
 void sendJsonTenths(const char *name, int16_t value, bool leadingComma = true) {
@@ -5254,16 +5548,19 @@ void handleControlEvents() {
     server.sendContent("}");
   }
   server.sendContent("]}");
+  server.sendContent("");
 }
 
 void handleControlLog() {
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "application/json", "");
-  server.sendContent("{\"count\":");
+  server.sendContent("{\"usesEpoch\":");
+  server.sendContent(decisionLogUsesEpoch ? "true" : "false");
+  server.sendContent(",\"count\":");
   server.sendContent(String(decisionLogCount));
   server.sendContent(",\"logs\":[");
-  for (uint8_t i = 0; i < decisionLogCount; i++) {
-    uint8_t idx = (decisionLogHead + kDecisionLogPoints - decisionLogCount + i) % kDecisionLogPoints;
+  for (uint16_t i = 0; i < decisionLogCount; i++) {
+    uint16_t idx = (decisionLogHead + kDecisionLogPoints - decisionLogCount + i) % kDecisionLogPoints;
     const DecisionLogEntry &entry = decisionLog[idx];
     if (i > 0) server.sendContent(",");
     JsonDocument doc;
@@ -5282,6 +5579,7 @@ void handleControlLog() {
     server.sendContent(out);
   }
   server.sendContent("]}");
+  server.sendContent("");
 }
 
 void handleStatus() {
@@ -5375,6 +5673,85 @@ void handleWifiPost() {
     startAccessPoint();
   }
   sendOk("wifi saved");
+}
+
+void handleWifiScan() {
+  if (apStarted && WiFi.status() != WL_CONNECTED) {
+    WiFi.mode(WIFI_AP_STA);
+    disableWifiPowerSave();
+  } else if (!apStarted && WiFi.status() != WL_CONNECTED) {
+    WiFi.mode(WIFI_STA);
+    disableWifiPowerSave();
+  }
+
+  int found = WiFi.scanNetworks(false, true);
+  if (found < 0) {
+    sendError(503, "WiFi scan failed");
+    return;
+  }
+
+  constexpr uint8_t kMaxScanCandidates = 64;
+  constexpr uint8_t kMaxScanResults = 40;
+  uint8_t candidateCount = static_cast<uint8_t>(min(found, static_cast<int>(kMaxScanCandidates)));
+  bool used[kMaxScanCandidates] = {};
+  String emittedSsids[kMaxScanResults];
+  uint8_t emittedCount = 0;
+  String networks;
+  networks.reserve(4096);
+
+  while (emittedCount < kMaxScanResults) {
+    int best = -1;
+    int bestRssi = -999;
+    for (uint8_t i = 0; i < candidateCount; i++) {
+      if (used[i]) continue;
+      String ssid = WiFi.SSID(i);
+      ssid.trim();
+      if (!ssid.length()) {
+        used[i] = true;
+        continue;
+      }
+      bool duplicate = false;
+      for (uint8_t j = 0; j < emittedCount; j++) {
+        if (emittedSsids[j] == ssid) {
+          duplicate = true;
+          break;
+        }
+      }
+      if (duplicate) {
+        used[i] = true;
+        continue;
+      }
+      int rssi = WiFi.RSSI(i);
+      if (best < 0 || rssi > bestRssi) {
+        best = i;
+        bestRssi = rssi;
+      }
+    }
+    if (best < 0) break;
+
+    used[best] = true;
+    String ssid = WiFi.SSID(best);
+    ssid.trim();
+    emittedSsids[emittedCount] = ssid;
+    bool open = WiFi.encryptionType(best) == WIFI_AUTH_OPEN;
+    if (emittedCount > 0) networks += ",";
+    networks += "{\"ssid\":";
+    networks += jsonString(ssid);
+    networks += ",\"rssi\":";
+    networks += String(WiFi.RSSI(best));
+    networks += ",\"channel\":";
+    networks += String(WiFi.channel(best));
+    networks += ",\"open\":";
+    networks += open ? "true" : "false";
+    networks += ",\"auth\":\"";
+    networks += open ? "开放" : "加密";
+    networks += "\"}";
+    emittedCount++;
+  }
+
+  WiFi.scanDelete();
+  String out = "{\"count\":" + String(emittedCount) + ",\"networks\":[" + networks + "]}";
+  server.send(200, "application/json", out);
 }
 
 void handleWifiForget() {
@@ -5886,6 +6263,7 @@ void setupRoutes() {
   server.on("/api/temp-history", HTTP_GET, handleTempHistory);
   server.on("/api/control-events", HTTP_GET, handleControlEvents);
   server.on("/api/control-log", HTTP_GET, handleControlLog);
+  server.on("/api/wifi-scan", HTTP_GET, handleWifiScan);
   server.on("/api/wifi", HTTP_POST, handleWifiPost);
   server.on("/api/wifi/forget", HTTP_POST, handleWifiForget);
   server.on("/api/ac-config", HTTP_POST, handleAcConfigPost);
@@ -5926,6 +6304,10 @@ void setupRoutes() {
     }
     if (method == HTTP_GET && uri == "/api/control-log") {
       handleControlLog();
+      return;
+    }
+    if (method == HTTP_GET && uri == "/api/wifi-scan") {
+      handleWifiScan();
       return;
     }
     if (method == HTTP_GET && (uri == "/remote" || uri == "/remote/")) {
