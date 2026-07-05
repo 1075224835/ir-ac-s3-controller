@@ -342,13 +342,14 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       border-radius: 24px;
       background: rgba(248, 251, 255, 0.88);
       backdrop-filter: blur(10px);
+      padding: 22px;
     }
     body[data-skin="bluehome"] main {
       width: min(1320px, 100%);
       grid-template-columns: minmax(0, 1.06fr) minmax(360px, 0.94fr);
       align-items: start;
-      gap: 18px;
-      padding: 0 22px;
+      gap: 22px;
+      padding: 0 26px;
     }
     body[data-skin="bluehome"] header {
       grid-column: 1 / -1;
@@ -384,6 +385,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     }
     body[data-skin="bluehome"] .status-grid {
       grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
     }
     label { display: grid; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 650; }
     input, select, textarea, button {
@@ -471,6 +473,10 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     section.collapsed .collapsible-body { display: none; }
     section.collapsed .section-head { margin-bottom: 0; }
     .subhead { color: var(--muted); font-size: 13px; line-height: 1.55; margin: -6px 0 14px; }
+    body[data-skin="bluehome"] .subhead {
+      max-width: 68ch;
+      line-height: 1.7;
+    }
     .message { min-height: 22px; color: var(--ok); font-size: 14px; line-height: 1.45; text-align: right; }
     .message.warn { color: var(--warn); }
     .status-grid, .form-grid {
@@ -478,6 +484,10 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 14px;
+    }
+    body[data-skin="bluehome"] .form-grid {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
     }
     .metric {
       min-width: 0;
@@ -540,6 +550,20 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     body[data-skin="bluehome"] .status-grid .metric:nth-child(-n+2) .value {
       color: #2f80ed;
       text-shadow: 0 8px 22px rgba(47, 128, 237, 0.18);
+    }
+    body[data-skin="bluehome"] .status-grid .metric:nth-child(n+3) {
+      min-height: 132px;
+      align-content: space-between;
+    }
+    body[data-skin="bluehome"] .status-grid .metric:nth-child(n+3) .value {
+      font-size: clamp(17px, 1.7vw, 23px);
+      line-height: 1.34;
+      font-weight: 760;
+    }
+    body[data-skin="bluehome"] #last {
+      font-size: 16px;
+      line-height: 1.35;
+      font-weight: 720;
     }
     .badge {
       display: inline-flex;
@@ -614,6 +638,14 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     .section-head > * { min-width: 0; }
     .section-head h2 { margin: 0 0 4px; }
     .section-head .subhead { margin: 0; }
+    body[data-skin="bluehome"] .section-head {
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    body[data-skin="bluehome"] .section-head .header-links,
+    body[data-skin="bluehome"] .section-head > .badge {
+      flex-shrink: 0;
+    }
     .segmented {
       width: 100%;
       display: grid;
@@ -629,6 +661,9 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     .segmented.wrap {
       grid-auto-flow: row;
       grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+    }
+    body[data-skin="bluehome"] .segmented.wrap {
+      grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
     }
     .segmented button {
       min-height: 34px;
@@ -722,6 +757,13 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       align-items: center;
       justify-content: space-between;
       gap: 10px;
+    }
+    body[data-skin="bluehome"] .preset-head,
+    body[data-skin="bluehome"] .special-title,
+    body[data-skin="bluehome"] .curve-toolbar,
+    body[data-skin="bluehome"] .curve-adjuster-head {
+      align-items: start;
+      gap: 14px;
     }
     .preset-head button { width: auto; min-width: 132px; }
     .preset-list {
@@ -1043,17 +1085,34 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       box-shadow: var(--inset);
     }
     small { display: block; margin-top: 8px; color: var(--muted); line-height: 1.45; }
-    @media (max-width: 980px) {
+    @media (max-width: 1180px) {
       body[data-skin="bluehome"] main {
         grid-template-columns: 1fr;
         width: 100%;
-        padding: 0 14px;
+        padding: 0 18px;
       }
       body[data-skin="bluehome"] main > section {
         grid-column: 1 / -1 !important;
       }
       body[data-skin="bluehome"] .status-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 900px) {
+      body[data-skin="bluehome"] .section-head,
+      body[data-skin="bluehome"] .preset-head,
+      body[data-skin="bluehome"] .special-title,
+      body[data-skin="bluehome"] .curve-toolbar,
+      body[data-skin="bluehome"] .curve-adjuster-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+      }
+      body[data-skin="bluehome"] .section-head .header-links,
+      body[data-skin="bluehome"] .section-head > .badge {
+        width: 100%;
+      }
+      body[data-skin="bluehome"] .two-col {
+        grid-template-columns: 1fr;
       }
     }
     @media (max-width: 760px) {
@@ -1075,6 +1134,13 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       .message { text-align: left; }
       .status-grid, .form-grid { grid-template-columns: 1fr; gap: 10px; }
       body[data-skin="bluehome"] .status-grid { grid-template-columns: 1fr; }
+      body[data-skin="bluehome"] main { padding: 0 10px; gap: 14px; }
+      body[data-skin="bluehome"] section { padding: 16px; border-radius: 20px; }
+      body[data-skin="bluehome"] .form-grid { grid-template-columns: 1fr; gap: 12px; }
+      body[data-skin="bluehome"] .subhead { display: none; }
+      body[data-skin="bluehome"] .status-grid { gap: 12px; }
+      body[data-skin="bluehome"] .header-links { width: 100%; }
+      body[data-skin="bluehome"] .skin-switch { width: 100%; grid-auto-columns: minmax(0, 1fr); }
       .segmented.wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .segmented button { min-height: 36px; padding: 6px 5px; font-size: 13px; }
       .preset-schedule-summary { grid-template-columns: 1fr; }
@@ -3039,7 +3105,8 @@ const char kMatchHtml[] PROGMEM = R"MATCH(
       box-shadow:var(--shadow-sm);
     }
     body[data-skin="bluehome"] main { max-width:1260px; }
-    body[data-skin="bluehome"] .grid { grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); }
+    body[data-skin="bluehome"] .grid { grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); }
+    body[data-skin="bluehome"] .unknown-grid { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
     .card.matched { border-color:rgba(10,109,94,.65); background:rgba(0,106,112,.10); box-shadow:var(--pressed); }
     .unknown-head { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:10px; }
     .unknown-head h2 { margin:0; font-size:18px; }
