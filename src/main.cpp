@@ -277,6 +277,25 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       --inset: inset 4px 4px 9px rgba(111, 91, 58, 0.18), inset -4px -4px 9px rgba(255, 255, 255, 0.58);
       --pressed: inset 3px 3px 8px rgba(31, 24, 12, 0.28), inset -3px -3px 7px rgba(255, 255, 255, 0.42);
     }
+    body[data-skin="bluehome"] {
+      --bg: #cfdaec;
+      --panel: #f7faff;
+      --panel-strong: #ffffff;
+      --ink: #12213d;
+      --muted: #7a89a3;
+      --line: rgba(83, 112, 158, 0.13);
+      --accent: #2f80ed;
+      --accent-deep: #2667d8;
+      --accent-soft: rgba(47, 128, 237, 0.13);
+      --ok: #2f80ed;
+      --warn: #7b61ff;
+      --danger: #ec5f67;
+      --control: rgba(47, 128, 237, 0.08);
+      --shadow: 0 22px 46px rgba(78, 101, 142, 0.20), 0 2px 7px rgba(255, 255, 255, 0.80);
+      --shadow-sm: 0 12px 28px rgba(78, 101, 142, 0.16), 0 1px 5px rgba(255, 255, 255, 0.82);
+      --inset: inset 0 1px 0 rgba(255, 255, 255, 0.92), inset 0 -10px 22px rgba(73, 112, 178, 0.05);
+      --pressed: inset 0 3px 10px rgba(50, 80, 130, 0.20);
+    }
     * { box-sizing: border-box; }
     html { width: 100%; overflow-x: hidden; }
     body {
@@ -286,6 +305,9 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       background: var(--bg);
       color: var(--ink);
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body[data-skin="bluehome"] {
+      background: linear-gradient(180deg, #d8e3f5 0%, #cfd9eb 48%, #c4d0e5 100%);
     }
     main {
       width: min(1160px, 100%);
@@ -314,6 +336,54 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       border-radius: 18px;
       padding: 18px;
       box-shadow: var(--shadow);
+    }
+    body[data-skin="bluehome"] section {
+      border: 0;
+      border-radius: 24px;
+      background: rgba(248, 251, 255, 0.88);
+      backdrop-filter: blur(10px);
+    }
+    body[data-skin="bluehome"] main {
+      width: min(1320px, 100%);
+      grid-template-columns: minmax(0, 1.06fr) minmax(360px, 0.94fr);
+      align-items: start;
+      gap: 18px;
+      padding: 0 22px;
+    }
+    body[data-skin="bluehome"] header {
+      grid-column: 1 / -1;
+      align-items: center;
+      padding: 18px 4px 8px;
+    }
+    body[data-skin="bluehome"] h1 {
+      color: #10203b;
+      font-size: 28px;
+      text-transform: none;
+    }
+    body[data-skin="bluehome"] h2 {
+      color: #142440;
+      font-size: 17px;
+    }
+    body[data-skin="bluehome"] h3 {
+      color: #172845;
+      text-transform: none;
+    }
+    body[data-skin="bluehome"] main > section:nth-of-type(1),
+    body[data-skin="bluehome"] main > section:nth-of-type(4),
+    body[data-skin="bluehome"] main > section:nth-of-type(5),
+    body[data-skin="bluehome"] main > section:nth-of-type(8) {
+      grid-column: 1 / -1;
+    }
+    body[data-skin="bluehome"] main > section:nth-of-type(2),
+    body[data-skin="bluehome"] main > section:nth-of-type(6) {
+      grid-column: 1 / 2;
+    }
+    body[data-skin="bluehome"] main > section:nth-of-type(3),
+    body[data-skin="bluehome"] main > section:nth-of-type(7) {
+      grid-column: 2 / 3;
+    }
+    body[data-skin="bluehome"] .status-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
     label { display: grid; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 650; }
     input, select, textarea, button {
@@ -356,6 +426,22 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     button.secondary { background: var(--panel); color: var(--accent); border-color: rgba(0, 106, 112, 0.14); box-shadow: var(--shadow-sm); }
     button.danger { background: #efe1d8; color: var(--danger); border-color: rgba(169, 63, 50, 0.18); box-shadow: var(--shadow-sm); }
     button:disabled { cursor: wait; opacity: 0.68; }
+    body[data-skin="bluehome"] button {
+      border-color: rgba(47, 128, 237, 0.16);
+      background: linear-gradient(180deg, #3d8bff, var(--accent-deep));
+      box-shadow: 0 14px 26px rgba(47, 128, 237, 0.30);
+    }
+    body[data-skin="bluehome"] button.secondary,
+    body[data-skin="bluehome"] .badge {
+      background: rgba(255, 255, 255, 0.76);
+      border-color: rgba(47, 128, 237, 0.10);
+      box-shadow: var(--shadow-sm);
+    }
+    body[data-skin="bluehome"] button.danger {
+      background: #fff1f2;
+      border-color: rgba(236, 95, 103, 0.18);
+      box-shadow: var(--shadow-sm);
+    }
     .collapse-toggle {
       position: absolute;
       top: 12px;
@@ -405,6 +491,12 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       background: var(--panel);
       box-shadow: var(--inset);
     }
+    body[data-skin="bluehome"] .metric {
+      border: 0;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: var(--shadow-sm);
+    }
     .metric:last-child { border-right: 1px solid rgba(81, 68, 45, 0.12); }
     .label { color: var(--muted); font-size: 13px; }
     .value {
@@ -420,6 +512,10 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       overflow: hidden;
       border-color: rgba(0, 106, 112, 0.20);
       background: linear-gradient(145deg, #f5eddf, #e8decc);
+    }
+    body[data-skin="bluehome"] .status-grid .metric:nth-child(-n+2) {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 247, 255, 0.92));
+      border: 1px solid rgba(47, 128, 237, 0.12);
     }
     .status-grid .metric:nth-child(-n+2) .label {
       color: var(--accent);
@@ -441,6 +537,10 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       overflow-wrap: normal;
       text-shadow: 1px 1px 0 rgba(255,255,255,0.55);
     }
+    body[data-skin="bluehome"] .status-grid .metric:nth-child(-n+2) .value {
+      color: #2f80ed;
+      text-shadow: 0 8px 22px rgba(47, 128, 237, 0.18);
+    }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -459,6 +559,42 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     }
     a.badge { text-decoration: none; }
     .header-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .skin-switch {
+      display: inline-grid;
+      grid-auto-flow: column;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 999px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-sm);
+    }
+    .skin-switch button {
+      width: auto;
+      min-width: 58px;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      box-shadow: none;
+      font-size: 12px;
+      font-weight: 720;
+    }
+    .skin-switch button.selected {
+      background: linear-gradient(180deg, #08777d, var(--accent-deep));
+      color: #fff;
+      box-shadow: var(--shadow-sm);
+    }
+    body[data-skin="bluehome"] .skin-switch {
+      background: rgba(255, 255, 255, 0.62);
+      border-color: rgba(47, 128, 237, 0.08);
+    }
+    body[data-skin="bluehome"] .skin-switch button.selected {
+      background: linear-gradient(180deg, #3d8bff, var(--accent-deep));
+      box-shadow: 0 10px 18px rgba(47, 128, 237, 0.28);
+    }
     .actions {
       min-width: 0;
       display: grid;
@@ -512,6 +648,16 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       color: #fff;
       box-shadow: var(--shadow-sm);
     }
+    body[data-skin="bluehome"] .segmented {
+      background: rgba(237, 243, 252, 0.86);
+      border-color: rgba(47, 128, 237, 0.08);
+    }
+    body[data-skin="bluehome"] .segmented button.selected,
+    body[data-skin="bluehome"] button.curve-chip.selected {
+      background: linear-gradient(180deg, #3d8bff, var(--accent-deep));
+      color: #fff;
+      box-shadow: 0 10px 18px rgba(47, 128, 237, 0.24);
+    }
     .segmented-source {
       position: absolute;
       inline-size: 1px;
@@ -541,6 +687,22 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       line-height: 1.55;
     }
     .table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--inset); }
+    body[data-skin="bluehome"] pre,
+    body[data-skin="bluehome"] .table-wrap,
+    body[data-skin="bluehome"] .preset-card,
+    body[data-skin="bluehome"] .preset-schedule,
+    body[data-skin="bluehome"] .curve-editor,
+    body[data-skin="bluehome"] .settings-panel,
+    body[data-skin="bluehome"] .special-panel,
+    body[data-skin="bluehome"] .log-item,
+    body[data-skin="bluehome"] .wifi-network {
+      border-color: rgba(47, 128, 237, 0.08);
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow: var(--shadow-sm);
+    }
+    body[data-skin="bluehome"] th {
+      background: rgba(47, 128, 237, 0.08);
+    }
     table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 680px; }
     th, td { border-bottom: 1px solid var(--line); padding: 9px 10px; text-align: left; vertical-align: top; }
     th { color: var(--muted); font-weight: 650; background: rgba(0, 106, 112, 0.08); }
@@ -749,6 +911,12 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       box-shadow: var(--inset);
       touch-action: none;
     }
+    body[data-skin="bluehome"] .curve-stage {
+      border: 0;
+      border-radius: 24px;
+      background: linear-gradient(180deg, #eef5ff, #e6effc);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 16px 34px rgba(72, 102, 150, 0.16);
+    }
     #curveSvg {
       display: block;
       width: 100%;
@@ -875,6 +1043,19 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       box-shadow: var(--inset);
     }
     small { display: block; margin-top: 8px; color: var(--muted); line-height: 1.45; }
+    @media (max-width: 980px) {
+      body[data-skin="bluehome"] main {
+        grid-template-columns: 1fr;
+        width: 100%;
+        padding: 0 14px;
+      }
+      body[data-skin="bluehome"] main > section {
+        grid-column: 1 / -1 !important;
+      }
+      body[data-skin="bluehome"] .status-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
     @media (max-width: 760px) {
       main { width: 100%; padding: 0 10px; margin-top: 12px; gap: 12px; }
       header { display: grid; align-items: start; }
@@ -893,6 +1074,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       .badge { min-height: 26px; padding: 3px 8px; font-size: 12px; }
       .message { text-align: left; }
       .status-grid, .form-grid { grid-template-columns: 1fr; gap: 10px; }
+      body[data-skin="bluehome"] .status-grid { grid-template-columns: 1fr; }
       .segmented.wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .segmented button { min-height: 36px; padding: 6px 5px; font-size: 13px; }
       .preset-schedule-summary { grid-template-columns: 1fr; }
@@ -912,12 +1094,20 @@ const char kIndexHtml[] PROGMEM = R"HTML(
   </style>
 </head>
 <body>
+<script>try{document.body.dataset.skin=localStorage.getItem('ir-ac-skin')==='bluehome'?'bluehome':'cream'}catch(e){}</script>
 <main>
   <header>
     <div>
       <h1>红外空调控制器</h1>
       <div class="label">ESP32-S3 · SHT31 · 红外学习与睡眠曲线</div>
-      <div class="header-links"><a class="badge" href="/remote">打开手机遥控器</a><a class="badge" href="/match">打开对码检查</a></div>
+      <div class="header-links">
+        <a class="badge" href="/remote">打开手机遥控器</a>
+        <a class="badge" href="/match">打开对码检查</a>
+        <div class="skin-switch" aria-label="皮肤选择">
+          <button type="button" data-skin-choice="cream" onclick="setSkin('cream')">奶油</button>
+          <button type="button" data-skin-choice="bluehome" onclick="setSkin('bluehome')">蓝家居</button>
+        </div>
+      </div>
     </div>
     <div class="message" id="msg">正在读取状态...</div>
   </header>
@@ -1200,6 +1390,19 @@ let curveAutoSaveInFlight = false;
 let curveAutoSavePending = false;
 let remoteStateSaveTimer = 0;
 const openPresetSchedules = new Set();
+function setSkin(name){
+  const skin = name === 'bluehome' ? 'bluehome' : 'cream';
+  document.body.dataset.skin = skin;
+  document.querySelectorAll('[data-skin-choice]').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.skinChoice === skin);
+  });
+  try { localStorage.setItem('ir-ac-skin', skin); } catch(e) {}
+}
+function initSkin(){
+  let skin = 'cream';
+  try { skin = localStorage.getItem('ir-ac-skin') || 'cream'; } catch(e) {}
+  setSkin(skin);
+}
 function ensureCurveStrategyControls(){
   if ($('curveControlMode') || !$('autoMode')) return;
   if ($('sleepDuration')) {
@@ -2762,6 +2965,7 @@ async function saveCurve(auto=false){
     }
   }
 }
+initSkin();
 ensureCurveStrategyControls();
 enhanceSegmentedControls();
 ensureSleepPresets();
@@ -2805,6 +3009,7 @@ const char kMatchHtml[] PROGMEM = R"MATCH(
     :root { color-scheme:light; --bg:#e8decc; --panel:#eee6d8; --panel-strong:#f7efe4; --ink:#1f1a14; --muted:#776d5c; --line:rgba(81,68,45,.18); --accent:#006a70; --accent-deep:#004e54; --ok:#0a6d5e; --warn:#9a651c; --control:rgba(118,105,82,.13); --shadow:8px 8px 18px rgba(111,91,58,.18), -8px -8px 18px rgba(255,255,255,.58); --shadow-sm:4px 4px 10px rgba(111,91,58,.16), -4px -4px 10px rgba(255,255,255,.56); --inset:inset 4px 4px 9px rgba(111,91,58,.18), inset -4px -4px 9px rgba(255,255,255,.58); --pressed:inset 3px 3px 8px rgba(31,24,12,.28), inset -3px -3px 7px rgba(255,255,255,.42); }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    body[data-skin="bluehome"] { --bg:#cfdaec; --panel:#f7faff; --panel-strong:#fff; --ink:#12213d; --muted:#7a89a3; --line:rgba(83,112,158,.13); --accent:#2f80ed; --accent-deep:#2667d8; --ok:#2f80ed; --warn:#7b61ff; --control:rgba(47,128,237,.08); --shadow:0 22px 46px rgba(78,101,142,.20), 0 2px 7px rgba(255,255,255,.80); --shadow-sm:0 12px 28px rgba(78,101,142,.16), 0 1px 5px rgba(255,255,255,.82); --inset:inset 0 1px 0 rgba(255,255,255,.92), inset 0 -10px 22px rgba(73,112,178,.05); --pressed:inset 0 3px 10px rgba(50,80,130,.20); background:linear-gradient(180deg,#d8e3f5 0%,#cfd9eb 48%,#c4d0e5 100%); }
     main { width:min(1180px,100%); margin:0 auto; padding:18px; display:grid; gap:18px; }
     header { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
     h1 { margin:0; font-size:24px; }
@@ -2817,12 +3022,24 @@ const char kMatchHtml[] PROGMEM = R"MATCH(
     select option { background:#fff; color:#172033; }
     select option:checked { background:#bfd6cf; color:#172033; }
     button { cursor:pointer; border-color:rgba(0,78,84,.22); background:linear-gradient(180deg,#08777d,var(--accent-deep)); color:#fff; font-weight:650; box-shadow:var(--shadow-sm); }
+    body[data-skin="bluehome"] button { border-color:rgba(47,128,237,.16); background:linear-gradient(180deg,#3d8bff,var(--accent-deep)); box-shadow:0 14px 26px rgba(47,128,237,.30); }
     button:active { box-shadow:var(--pressed); transform:translateY(1px); }
     button.secondary { background:var(--panel); color:var(--accent); }
     .stats { display:flex; flex-wrap:wrap; gap:8px; }
     .capture { white-space:pre-wrap; overflow-wrap:anywhere; color:var(--muted); font-family:ui-monospace,Consolas,monospace; font-size:12px; line-height:1.45; }
     .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
     .card { border:1px solid var(--line); border-radius:16px; padding:10px; display:grid; gap:6px; min-height:112px; background:var(--panel); box-shadow:var(--shadow-sm); }
+    body[data-skin="bluehome"] section,
+    body[data-skin="bluehome"] .card,
+    body[data-skin="bluehome"] .unknown-card,
+    body[data-skin="bluehome"] .badge {
+      border-color:rgba(47,128,237,.08);
+      border-radius:22px;
+      background:rgba(255,255,255,.78);
+      box-shadow:var(--shadow-sm);
+    }
+    body[data-skin="bluehome"] main { max-width:1260px; }
+    body[data-skin="bluehome"] .grid { grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); }
     .card.matched { border-color:rgba(10,109,94,.65); background:rgba(0,106,112,.10); box-shadow:var(--pressed); }
     .unknown-head { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:10px; }
     .unknown-head h2 { margin:0; font-size:18px; }
@@ -2837,6 +3054,7 @@ const char kMatchHtml[] PROGMEM = R"MATCH(
   </style>
 </head>
 <body>
+<script>try{document.body.dataset.skin=localStorage.getItem('ir-ac-skin')==='bluehome'?'bluehome':'cream'}catch(e){}</script>
 <main>
   <header>
     <div>
@@ -3215,6 +3433,27 @@ const char kRemoteHtml[] PROGMEM = R"REMOTE(
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
     }
+    body[data-skin="bluehome"] {
+      --bg: #cfdaec;
+      --remote: #f7faff;
+      --remote-edge: #edf4ff;
+      --panel: #ffffff;
+      --ink: #12213d;
+      --muted: #7a89a3;
+      --button: #ffffff;
+      --button-ink: #12213d;
+      --accent: #2f80ed;
+      --accent-deep: #2667d8;
+      --accent-ink: #ffffff;
+      --danger: #ec5f67;
+      --ok: #2f80ed;
+      --line: rgba(83,112,158,0.13);
+      --shadow: 0 24px 48px rgba(78,101,142,0.22), 0 2px 7px rgba(255,255,255,0.82);
+      --shadow-sm: 0 13px 28px rgba(78,101,142,0.16), 0 1px 5px rgba(255,255,255,0.84);
+      --inset: inset 0 1px 0 rgba(255,255,255,0.92), inset 0 -10px 22px rgba(73,112,178,0.05);
+      --pressed: inset 0 3px 10px rgba(50,80,130,0.22);
+      background: linear-gradient(180deg, #d8e3f5 0%, #cfd9eb 48%, #c4d0e5 100%);
+    }
     .wrap {
       width: 100%;
       max-width: 430px;
@@ -3248,6 +3487,11 @@ const char kRemoteHtml[] PROGMEM = R"REMOTE(
       background: linear-gradient(180deg, var(--remote), var(--remote-edge));
       box-shadow: var(--shadow);
       padding: 18px;
+    }
+    body[data-skin="bluehome"] .remote {
+      border: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,.88), rgba(239,246,255,.92));
+      backdrop-filter: blur(12px);
     }
     .screen {
       min-width: 0;
@@ -3315,6 +3559,13 @@ const char kRemoteHtml[] PROGMEM = R"REMOTE(
       border-radius: 999px;
       background: linear-gradient(180deg, #08777d, var(--accent-deep));
       color: #fff;
+    }
+    body[data-skin="bluehome"] .send,
+    body[data-skin="bluehome"] .button-grid button.selected,
+    body[data-skin="bluehome"] .edit-toggle.active {
+      background: linear-gradient(180deg, #3d8bff, var(--accent-deep));
+      color: #fff;
+      box-shadow: 0 14px 26px rgba(47,128,237,.28);
     }
     .temp-pad {
       min-width: 0;
@@ -3506,6 +3757,15 @@ const char kRemoteHtml[] PROGMEM = R"REMOTE(
       box-shadow: var(--shadow);
       backdrop-filter: blur(12px);
     }
+    body[data-skin="bluehome"] .screen,
+    body[data-skin="bluehome"] .temp-center,
+    body[data-skin="bluehome"] .learn-capture,
+    body[data-skin="bluehome"] .learned-card,
+    body[data-skin="bluehome"] .quickbar {
+      border-color: rgba(47,128,237,.08);
+      background: rgba(255,255,255,.76);
+      box-shadow: var(--shadow-sm);
+    }
     .quickbar button {
       min-height: 48px;
       border-radius: 16px;
@@ -3530,6 +3790,7 @@ const char kRemoteHtml[] PROGMEM = R"REMOTE(
   </style>
 </head>
 <body>
+  <script>try{document.body.dataset.skin=localStorage.getItem('ir-ac-skin')==='bluehome'?'bluehome':'cream'}catch(e){}</script>
   <div class="wrap">
     <div class="topbar">
       <a href="/">返回配置页</a>
