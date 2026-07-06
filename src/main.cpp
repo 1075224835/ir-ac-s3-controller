@@ -72,6 +72,7 @@ struct DeviceConfig {
   bool capSwingV = true;
   bool capSwingH = true;
   bool capFilter = true;
+  uint32_t lastCurveEndPoweroffKey = 0;
   uint8_t curveCount = 4;
   CurvePoint curve[kMaxCurvePoints] = {
       {0, 27.0f},
@@ -2639,6 +2640,7 @@ function actionText(action){
     skip_deadband:'死区内跳过',
     skip_predict:'趋势预测跳过',
     skip_delta:'发送过滤跳过',
+    skip_end_once:'结束已执行',
     end_poweroff:'结束关机',
     end_hold:'结束保持'
   }[action] || action || '事件';
@@ -4658,6 +4660,7 @@ void saveConfig() {
   doc["capSwingV"] = config.capSwingV;
   doc["capSwingH"] = config.capSwingH;
   doc["capFilter"] = config.capFilter;
+  doc["lastCurveEndPoweroffKey"] = config.lastCurveEndPoweroffKey;
   JsonArray curve = doc["curve"].to<JsonArray>();
   for (uint8_t i = 0; i < config.curveCount; i++) {
     JsonObject point = curve.add<JsonObject>();
@@ -4720,6 +4723,7 @@ void loadConfig() {
   config.capSwingV = doc["capSwingV"] | config.capSwingV;
   config.capSwingH = doc["capSwingH"] | config.capSwingH;
   config.capFilter = doc["capFilter"] | config.capFilter;
+  config.lastCurveEndPoweroffKey = doc["lastCurveEndPoweroffKey"] | config.lastCurveEndPoweroffKey;
   normalizeTuningConfig();
   normalizeConfigRemoteState();
   JsonArray curve = doc["curve"].as<JsonArray>();
@@ -5781,6 +5785,21 @@ bool sleepCurveIsActive(uint16_t nowMinute, uint16_t *elapsedOut) {
   return false;
 }
 
+uint32_t sleepCurveCycleKey(uint16_t nowMinute) {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo, 5)) return 0;
+  timeinfo.tm_hour = 12;
+  timeinfo.tm_min = 0;
+  timeinfo.tm_sec = 0;
+  timeinfo.tm_isdst = -1;
+  if (nowMinute < config.sleepStartMinute % 1440) {
+    timeinfo.tm_mday -= 1;
+  }
+  mktime(&timeinfo);
+  return static_cast<uint32_t>(timeinfo.tm_year + 1900) * 1000UL +
+         static_cast<uint32_t>(timeinfo.tm_yday + 1);
+}
+
 void resetAutoSendMemory() {
   lastAutoSentSetpoint = NAN;
   lastAutoSentMode = "";
@@ -5820,7 +5839,23 @@ void runAutoControl() {
   uint16_t elapsed = 0;
   bool curveActive = clockSynced && config.autoEnabled && sleepCurveIsActive(nowMinute, &elapsed);
   if (!curveActive) {
-    if (clockSynced && sleepCurveWasActive && config.curveEndAction == "poweroff") {
+    if (clockSynced && sleepCurveWasActive && config.humidityControlEnabled) {
+      addDecisionLog("end_hold", "end", "曲线结束，独立湿度控制继续接管，不执行关机", roomTempC, NAN, NAN);
+      resetAutoSendMemory();
+      sleepCurveWasActive = false;
+    } else if (clockSynced && sleepCurveWasActive && config.curveEndAction == "poweroff") {
+      uint32_t cycleKey = sleepCurveCycleKey(nowMinute);
+      if (cycleKey != 0 && config.lastCurveEndPoweroffKey == cycleKey) {
+        addDecisionLog("skip_end_once", "end", "本睡眠周期结束关机已执行，跳过重复关机", roomTempC, NAN, NAN);
+        resetAutoSendMemory();
+        lastControlMs = millis();
+        sleepCurveWasActive = false;
+        return;
+      }
+      if (cycleKey != 0) {
+        config.lastCurveEndPoweroffKey = cycleKey;
+        saveConfig();
+      }
       pendingAc.power = false;
       pendingAc.mode = lastAutoSentMode.length() ? lastAutoSentMode : config.remoteMode;
       if (pendingAc.mode == "smart") pendingAc.mode = "auto";
@@ -5987,6 +6022,7 @@ void addConfigToJson(JsonObject obj) {
   obj["capSwingV"] = config.capSwingV;
   obj["capSwingH"] = config.capSwingH;
   obj["capFilter"] = config.capFilter;
+  obj["lastCurveEndPoweroffKey"] = config.lastCurveEndPoweroffKey;
   JsonArray curve = obj["curve"].to<JsonArray>();
   for (uint8_t i = 0; i < config.curveCount; i++) {
     JsonObject point = curve.add<JsonObject>();
@@ -6788,6 +6824,9 @@ void applyConfigJson(JsonObject src) {
   if (src["capSwingV"].is<bool>()) config.capSwingV = src["capSwingV"] | config.capSwingV;
   if (src["capSwingH"].is<bool>()) config.capSwingH = src["capSwingH"] | config.capSwingH;
   if (src["capFilter"].is<bool>()) config.capFilter = src["capFilter"] | config.capFilter;
+  if (src["lastCurveEndPoweroffKey"].is<uint32_t>() || src["lastCurveEndPoweroffKey"].is<int>()) {
+    config.lastCurveEndPoweroffKey = src["lastCurveEndPoweroffKey"] | config.lastCurveEndPoweroffKey;
+  }
   JsonArray curve = src["curve"].as<JsonArray>();
   if (!curve.isNull()) {
     config.curveCount = 0;
