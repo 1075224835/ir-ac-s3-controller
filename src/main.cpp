@@ -1603,9 +1603,9 @@ function enhanceSegmentedControls(){
 }
 function ensureTempHistorySection(){
   if ($('tempHistorySvg')) return;
-  const curveSection = $('curveSvg')?.closest('section');
-  if (!curveSection) return;
-  curveSection.insertAdjacentHTML('afterend', `
+  const statusSection = document.querySelector('main > section');
+  if (!statusSection) return;
+  statusSection.insertAdjacentHTML('afterend', `
     <section>
       <div class="section-head">
         <div>
@@ -1621,6 +1621,34 @@ function ensureTempHistorySection(){
       <div class="label" id="tempHistoryInfo" style="margin-top:10px">暂无记录</div>
     </section>
   `);
+}
+function orderMainSections(){
+  const main = document.querySelector('main');
+  if (!main) return;
+  const desired = [
+    '当前状态',
+    '72小时温湿度曲线',
+    '睡眠温度曲线',
+    '空调控制',
+    '控制事件日志',
+    '维护与闭环设置',
+    '红外学习库',
+    'WiFi 配网'
+  ];
+  const sectionTitle = section => {
+    const h2 = section.querySelector(':scope > .section-head h2');
+    if (h2) return h2.textContent.trim();
+    if (section.querySelector(':scope > .status-grid')) return '当前状态';
+    return '';
+  };
+  const sections = Array.from(main.querySelectorAll(':scope > section'));
+  const ranked = sections.map((section, index) => {
+    const title = sectionTitle(section);
+    const order = desired.indexOf(title);
+    return {section, index, order: order >= 0 ? order : desired.length + index};
+  });
+  ranked.sort((a, b) => a.order - b.order || a.index - b.index);
+  ranked.forEach(item => main.appendChild(item.section));
 }
 function enableCollapsibleSections(){
   document.querySelectorAll('main > section').forEach((section, index) => {
@@ -3107,6 +3135,7 @@ ensureCurveStrategyControls();
 enhanceSegmentedControls();
 ensureSleepPresets();
 ensureTempHistorySection();
+orderMainSections();
 bindTempHistoryInteractions();
 enableCollapsibleSections();
 bindDirty();
