@@ -272,6 +272,9 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       --accent-soft: rgba(0, 106, 112, 0.10);
       --ok: #0a6d5e;
       --warn: #9a651c;
+      --history-temp: #d94a3a;
+      --history-temp-soft: rgba(217, 74, 58, 0.16);
+      --history-humidity: #2f80ed;
       --danger: #a93f32;
       --control: rgba(118, 105, 82, 0.13);
       --shadow: 8px 8px 18px rgba(111, 91, 58, 0.18), -8px -8px 18px rgba(255, 255, 255, 0.58);
@@ -291,6 +294,9 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       --accent-soft: rgba(47, 128, 237, 0.13);
       --ok: #2f80ed;
       --warn: #7b61ff;
+      --history-temp: #ef5b4f;
+      --history-temp-soft: rgba(239, 91, 79, 0.16);
+      --history-humidity: #2f80ed;
       --danger: #ec5f67;
       --control: rgba(47, 128, 237, 0.08);
       --shadow: 0 22px 46px rgba(78, 101, 142, 0.20), 0 2px 7px rgba(255, 255, 255, 0.80);
@@ -972,9 +978,9 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     .curve-axis { stroke: var(--muted); stroke-width: 1.2; }
     .curve-line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
     .curve-fill { fill: rgba(23, 105, 224, 0.12); }
-    .history-line { fill: none; stroke: var(--ok); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-    .history-humidity-line { fill: none; stroke: var(--warn); stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
-    .history-fill { fill: rgba(11, 143, 85, 0.12); }
+    .history-line { fill: none; stroke: var(--history-temp); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+    .history-humidity-line { fill: none; stroke: var(--history-humidity); stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+    .history-fill { fill: var(--history-temp-soft); }
     .history-stage { position: relative; cursor: grab; }
     .history-stage.dragging { cursor: grabbing; }
     #tempHistorySvg {
@@ -985,8 +991,8 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       touch-action: none;
     }
     .history-hover-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; pointer-events: none; }
-    .history-hover-dot { fill: var(--panel-strong); stroke: var(--ok); stroke-width: 2; pointer-events: none; }
-    .history-hover-dot.humidity { stroke: var(--warn); }
+    .history-hover-dot { fill: var(--panel-strong); stroke: var(--history-temp); stroke-width: 2; pointer-events: none; }
+    .history-hover-dot.humidity { stroke: var(--history-humidity); }
     .history-tooltip {
       position: absolute;
       z-index: 3;
@@ -1850,8 +1856,8 @@ function renderTempHistory(data=null){
   const humidityTicks = historyTicks(minHumidity, maxHumidity, 5);
   const grid = [
     ...xTicks.map(m => `<line class="curve-grid" x1="${historyX(m,start,end).toFixed(1)}" y1="${historyView.t}" x2="${historyX(m,start,end).toFixed(1)}" y2="${baseY}"></line><text class="curve-label" x="${historyX(m,start,end).toFixed(1)}" y="${historyView.h - 12}" text-anchor="middle">${formatHistoryLabel(m, tempHistoryState.usesEpoch, latest)}</text>`),
-    ...yTicks.map(t => `<line class="curve-grid" x1="${historyView.l}" y1="${historyY(t,minTemp,maxTemp).toFixed(1)}" x2="${historyView.w - historyView.r}" y2="${historyY(t,minTemp,maxTemp).toFixed(1)}"></line><text class="curve-label" x="8" y="${(historyY(t,minTemp,maxTemp) + 4).toFixed(1)}">${t}℃</text>`),
-    ...humidityTicks.map(h => `<text class="curve-label" x="${historyView.w - 8}" y="${(historyY(h,minHumidity,maxHumidity) + 4).toFixed(1)}" text-anchor="end">${Math.round(h)}%</text>`)
+    ...yTicks.map(t => `<line class="curve-grid" x1="${historyView.l}" y1="${historyY(t,minTemp,maxTemp).toFixed(1)}" x2="${historyView.w - historyView.r}" y2="${historyY(t,minTemp,maxTemp).toFixed(1)}"></line><text class="curve-label" x="8" y="${(historyY(t,minTemp,maxTemp) + 4).toFixed(1)}" style="fill:var(--history-temp)">${t}℃</text>`),
+    ...humidityTicks.map(h => `<text class="curve-label" x="${historyView.w - 8}" y="${(historyY(h,minHumidity,maxHumidity) + 4).toFixed(1)}" text-anchor="end" style="fill:var(--history-humidity)">${Math.round(h)}%</text>`)
   ].join('');
   const last = samples[samples.length - 1];
   let hover = '';
@@ -1867,8 +1873,8 @@ function renderTempHistory(data=null){
   let lastNode = '';
   if (last.minute >= start && last.minute <= end) {
     const lx = historyX(last.minute,start,end).toFixed(1);
-    lastNode = `<circle cx="${lx}" cy="${historyY(last.temp,minTemp,maxTemp).toFixed(1)}" r="5" fill="var(--ok)"></circle>`;
-    if (Number.isFinite(Number(last.humidity))) lastNode += `<circle cx="${lx}" cy="${historyY(Number(last.humidity),minHumidity,maxHumidity).toFixed(1)}" r="4.5" fill="var(--warn)"></circle>`;
+    lastNode = `<circle cx="${lx}" cy="${historyY(last.temp,minTemp,maxTemp).toFixed(1)}" r="5" fill="var(--history-temp)"></circle>`;
+    if (Number.isFinite(Number(last.humidity))) lastNode += `<circle cx="${lx}" cy="${historyY(Number(last.humidity),minHumidity,maxHumidity).toFixed(1)}" r="4.5" fill="var(--history-humidity)"></circle>`;
   }
   const eventMarkers = tempHistoryState.eventsUseEpoch === tempHistoryState.usesEpoch
     ? filteredControlLogs(tempHistoryState.events).filter(e => e.minute >= start && e.minute <= end).map(e => {
@@ -1876,7 +1882,7 @@ function renderTempHistory(data=null){
       return `<line class="history-event-line" x1="${x}" y1="${historyView.t}" x2="${x}" y2="${baseY}"></line><circle class="history-event-dot" cx="${x}" cy="${historyView.t + 10}" r="4"></circle>`;
     }).join('')
     : '';
-  const legend = `<text class="curve-label" x="${historyView.l}" y="12" style="fill:var(--ok)">室温 ℃</text><text class="curve-label" x="${historyView.w - historyView.r}" y="12" text-anchor="end" style="fill:var(--warn)">湿度 %</text>`;
+  const legend = `<text class="curve-label" x="${historyView.l}" y="12" style="fill:var(--history-temp)">室温 ℃</text><text class="curve-label" x="${historyView.w - historyView.r}" y="12" text-anchor="end" style="fill:var(--history-humidity)">湿度 %</text>`;
   svg.innerHTML = `${grid}${legend}<line class="curve-axis" x1="${historyView.l}" y1="${baseY}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.l}" y1="${historyView.t}" x2="${historyView.l}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.w - historyView.r}" y1="${historyView.t}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line>${fill ? `<path class="history-fill" d="${fill}"></path><path class="history-line" d="${path}"></path>` : ''}${humidityPath ? `<path class="history-humidity-line" d="${humidityPath}"></path>` : ''}${eventMarkers}${lastNode}${hover}`;
   if ($('tempHistoryBadge')) $('tempHistoryBadge').textContent = `${samples.length} / 4320 点`;
   if ($('tempHistoryInfo')) {
