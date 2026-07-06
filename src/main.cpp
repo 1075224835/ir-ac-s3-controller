@@ -1293,7 +1293,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     </div>
     <div class="form-grid">
       <label>自动控制<select id="autoEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
-      <label>自动模式<select id="autoMode"><option value="cool">制冷</option><option value="auto">自动</option><option value="dry">除湿</option><option value="heat">制热</option><option value="fan">送风</option></select></label>
+      <label>自动模式<select id="autoMode"><option value="smart">智能判定</option><option value="cool">制冷</option><option value="auto">空调自动</option><option value="dry">除湿</option><option value="heat">制热</option><option value="fan">送风</option></select></label>
       <label>曲线除湿<select id="curveHumidityEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
       <label>开始时间 HH:MM<input id="sleepStart" value="23:00" inputmode="numeric"></label>
       <label>持续分钟<input id="sleepDuration" type="number" value="480"></label>
@@ -1458,6 +1458,42 @@ let curveAutoSaveInFlight = false;
 let curveAutoSavePending = false;
 let remoteStateSaveTimer = 0;
 const openPresetSchedules = new Set();
+let apiQueue = Promise.resolve();
+function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+async function fetchTextSafe(url, options={}, label='数据', retries=1, timeoutMs=22000, serial=true){
+  const run = async () => {
+    let lastError = null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const controller = window.AbortController ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : 0;
+      try {
+        const r = await fetch(url, Object.assign({}, options, controller ? {signal:controller.signal} : {}));
+        const text = await r.text();
+        if (!r.ok) throw new Error(text || `${label}获取失败`);
+        if (!text.trim()) throw new Error(`${label}返回为空`);
+        return text;
+      } catch(e) {
+        lastError = e;
+        if (attempt < retries) await wait(450 + attempt * 350);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }
+    throw lastError || new Error(`${label}获取失败`);
+  };
+  if (!serial) return run();
+  const job = apiQueue.then(run, run);
+  apiQueue = job.catch(() => {});
+  return job;
+}
+async function fetchJsonSafe(url, options={}, label='数据', retries=1, timeoutMs=22000, serial=true){
+  const text = await fetchTextSafe(url, options, label, retries, timeoutMs, serial);
+  try {
+    return JSON.parse(text);
+  } catch(e) {
+    throw new Error(`${label}JSON不完整，已放弃本次刷新`);
+  }
+}
 function setSkin(name){
   const skin = name === 'bluehome' ? 'bluehome' : 'cream';
   document.body.dataset.skin = skin;
@@ -1613,7 +1649,7 @@ function enableCollapsibleSections(){
 const maxCurvePoints = 8;
 let selectedCurveIndex = 0;
 let draggingCurveIndex = -1;
-const modeText = {cool:'制冷', auto:'自动', dry:'除湿', heat:'制热', fan:'送风'};
+const modeText = {smart:'智能', cool:'制冷', auto:'空调自动', dry:'除湿', heat:'制热', fan:'送风'};
 const fanText = {auto:'自动', min:'最小', low:'低风', medium:'中风', high:'高风', max:'最大'};
 
 function hhmmToMin(s){
@@ -1832,16 +1868,16 @@ async function refreshTempHistory(){
   if (tempHistoryRefreshInFlight || !$('tempHistorySvg')) return;
   tempHistoryRefreshInFlight = true;
   try {
-    const [historyRes, eventsRes] = await Promise.all([fetch('/api/temp-history'), fetch('/api/control-log')]);
-    if (!historyRes.ok) throw new Error(await historyRes.text());
-    const history = await historyRes.json();
-    if (eventsRes.ok) {
-      const eventData = await eventsRes.json();
+    const history = await fetchJsonSafe('/api/temp-history', {}, '温湿度历史', 1, 30000);
+    try {
+      const eventData = await fetchJsonSafe('/api/control-log', {}, '事件日志', 1, 30000);
       history.events = eventData.logs || [];
       history.eventsUseEpoch = !!eventData.usesEpoch;
       controlLogState.logs = eventData.logs || [];
       controlLogState.usesEpoch = !!eventData.usesEpoch;
-    }
+      controlLogState.capacity = Number(eventData.capacity || 0);
+      controlLogState.persistent = !!eventData.persistent;
+    } catch(e) {}
     renderTempHistory(history);
   } catch(e) {
     if ($('tempHistoryInfo')) $('tempHistoryInfo').textContent = e.message || '室温历史读取失败';
@@ -2396,9 +2432,7 @@ function bindDirty(){
 }
 async function post(url, body, okText, clearIds=[]){
   msg('正在发送...');
-  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  const t = await r.text();
-  if (!r.ok) throw new Error(t || '操作失败');
+  await fetchTextSafe(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}, '操作', 1, 30000);
   clearDirty(clearIds);
   msg(okText || '已完成');
   await refresh(true);
@@ -2407,7 +2441,7 @@ function scheduleRemoteStateSave(){
   clearTimeout(remoteStateSaveTimer);
   remoteStateSaveTimer = setTimeout(async () => {
     try {
-      await fetch('/api/remote-state', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(remoteCommandPayload())});
+      await fetchTextSafe('/api/remote-state', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(remoteCommandPayload())}, '遥控状态保存', 0, 12000);
     } catch(e) {}
   }, 500);
 }
@@ -2603,10 +2637,11 @@ function renderControlLog(logs=null){
     return;
   }
   box.innerHTML = filtered.slice().reverse().map(item => {
+    const hasNumber = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
     const temps = [
-      Number.isFinite(Number(item.room)) ? `室温 ${Number(item.room).toFixed(1)}℃` : '',
-      Number.isFinite(Number(item.target)) ? `目标 ${Number(item.target).toFixed(1)}℃` : '',
-      Number.isFinite(Number(item.setpoint)) ? `设定 ${Number(item.setpoint).toFixed(1)}℃` : ''
+      hasNumber(item.room) ? `室温 ${Number(item.room).toFixed(1)}℃` : '',
+      hasNumber(item.target) ? `目标 ${Number(item.target).toFixed(1)}℃` : '',
+      hasNumber(item.setpoint) ? `设定 ${Number(item.setpoint).toFixed(1)}℃` : ''
     ].filter(Boolean).join(' · ');
     const source = logSource(item);
     const type = logType(item);
@@ -2620,9 +2655,7 @@ async function refreshControlLog(){
   if (controlLogRefreshInFlight || !$('controlLog')) return;
   controlLogRefreshInFlight = true;
   try {
-    const r = await fetch('/api/control-log');
-    if (!r.ok) throw new Error(await r.text());
-    const data = await r.json();
+    const data = await fetchJsonSafe('/api/control-log', {}, '事件日志', 1, 30000);
     controlLogState.usesEpoch = !!data.usesEpoch;
     controlLogState.capacity = Number(data.capacity || 0);
     controlLogState.persistent = !!data.persistent;
@@ -2759,12 +2792,18 @@ function applyLive(data){
   if (data.autoTarget) {
     const mode = modeText[data.autoTarget.mode] || data.autoTarget.mode || '--';
     const room = Number.isFinite(data.temperatureC) ? `${Number(data.temperatureC).toFixed(1)} ℃` : '--';
+    const targetText = data.autoTarget.temperatureC !== null && data.autoTarget.temperatureC !== undefined && Number.isFinite(Number(data.autoTarget.temperatureC))
+      ? `${Number(data.autoTarget.temperatureC).toFixed(1)} ℃`
+      : '--';
+    const setpointText = data.autoTarget.setpointC !== null && data.autoTarget.setpointC !== undefined && Number.isFinite(Number(data.autoTarget.setpointC))
+      ? `${Number(data.autoTarget.setpointC).toFixed(1)} ℃`
+      : '--';
     const humidityPart = data.autoTarget.humidityActive && Number.isFinite(Number(data.humidity))
       ? ` · 湿度 ${Number(data.humidity).toFixed(0)}% / 目标 ${Number(data.autoTarget.targetHumidity).toFixed(0)}%`
       : '';
     const elapsedPart = data.autoTarget.curveActive ? ` / +${data.autoTarget.elapsedMinute} 分` : ' / 湿度控制';
     $('curveTargetBadge').textContent = data.autoTarget.active
-      ? `室温 ${room} · 目标 ${Number(data.autoTarget.temperatureC).toFixed(1)} ℃ · 设定 ${Number(data.autoTarget.setpointC).toFixed(1)} ℃ / ${mode}${humidityPart}${elapsedPart}`
+      ? `室温 ${room} · 目标 ${targetText} · 设定 ${setpointText} / ${mode}${humidityPart}${elapsedPart}`
       : '目标 -- / 曲线未生效';
   }
   $('captureBadge').textContent = data.capture && data.capture.available ? '已捕获' : '等待信号';
@@ -2774,8 +2813,7 @@ async function refreshLive(){
   if (liveRefreshInFlight || refreshInFlight) return;
   liveRefreshInFlight = true;
   try {
-    const r = await fetch('/api/live');
-    const live = await r.json();
+    const live = await fetchJsonSafe('/api/live', {}, '实时状态', 1, 12000);
     applyLive(live);
   } catch (e) {
     msg(e.message || '实时状态读取失败', true);
@@ -2787,8 +2825,7 @@ async function refresh(force=false){
   if (refreshInFlight) return;
   refreshInFlight = true;
   try {
-    const r = await fetch('/api/status');
-    state = await r.json();
+    state = await fetchJsonSafe('/api/status', {}, '完整状态', 1, 45000);
     applyLive(state);
     $('protocolBadge').textContent = state.config && state.config.acProtocol ? ('当前 ' + state.config.acProtocol) : '协议未配置';
     $('curveBadge').textContent = state.config && state.config.autoEnabled ? '自动控制已开启' : '自动控制关闭';
@@ -2892,10 +2929,7 @@ async function scanWifiNetworks(){
   try {
     if (btn) btn.disabled = true;
     if (box) box.innerHTML = '<div class="empty">正在扫描附近热点...</div>';
-    const r = await fetch('/api/wifi-scan');
-    const text = await r.text();
-    if (!r.ok) throw new Error(text || '扫描失败');
-    const data = JSON.parse(text);
+    const data = await fetchJsonSafe('/api/wifi-scan', {}, '热点扫描', 0, 25000);
     renderWifiScan(data.networks || []);
     msg(`扫描完成：${data.count || 0} 个热点`);
   } catch(e) {
@@ -2961,15 +2995,13 @@ async function updatePresetSchedule(id){
   const time = hhmmToMin($('presetTime' + id)?.value || '07:00');
   const mode = $('presetMode' + id)?.value || 'daily';
   try {
-    const r = await fetch('/api/update-preset', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+    await fetchTextSafe('/api/update-preset', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
       id,
       scheduleEnabled:enabled,
       scheduleMinute:time,
       scheduleMode:mode,
       dayMask:presetDayMask(id)
-    })});
-    const t = await r.text();
-    if (!r.ok) throw new Error(t || '定时保存失败');
+    })}, '定时保存', 1, 30000);
     msg('快捷指令定时已保存');
     await refresh(false);
   } catch(e) {
@@ -3009,7 +3041,7 @@ async function saveCurve(auto=false){
     if (!curve) throw new Error('曲线 JSON 无效');
     syncCurveTextarea(curve, false);
     if (!auto) msg('正在发送...');
-    const r = await fetch('/api/curve', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+    await fetchTextSafe('/api/curve', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
       autoEnabled:$('autoEnabled').value==='true',
       autoMode:$('autoMode').value,
       curveControlMode:$('curveControlMode').value,
@@ -3022,9 +3054,7 @@ async function saveCurve(auto=false){
       deadband:Number($('deadband').value),
       autoSendDelta:Number($('autoSendDelta').value),
       curve
-    })});
-    const t = await r.text();
-    if (!r.ok) throw new Error(t || '保存失败');
+    })}, '睡眠曲线保存', 1, 30000);
     clearDirty(['autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve']);
     msg(auto ? '睡眠曲线已自动保存' : '睡眠曲线已保存');
   } catch(e) {
@@ -3057,14 +3087,17 @@ $('otaFile')?.addEventListener('change', evt => {
   evt.target.value = '';
   uploadOtaFile(file);
 });
-refresh(true);
-refreshTempHistory();
-refreshControlLog();
+async function startDashboardRefresh(){
+  await refresh(true);
+  await refreshControlLog();
+  await refreshTempHistory();
+}
+startDashboardRefresh();
 window.addEventListener('resize', () => requestAnimationFrame(fitStatusReadouts));
-setInterval(refreshLive, 1000);
-setInterval(() => refresh(false), 15000);
-setInterval(refreshTempHistory, 60000);
-setInterval(refreshControlLog, 15000);
+setInterval(refreshLive, 3000);
+setInterval(() => refresh(false), 60000);
+setInterval(refreshTempHistory, 120000);
+setInterval(refreshControlLog, 60000);
 </script>
 </body>
 </html>
@@ -3431,9 +3464,10 @@ function handleCapture(capture){
 }
 async function refresh(){
   try {
-    const r = await fetch('/api/status');
-    state = await r.json();
-    $('protocolBadge').textContent = `协议 ${state.config.acProtocol} / 型号 ${state.config.acModel}`;
+    const needFull = !entries.length || !state.config;
+    const data = await fetchJsonSafe(needFull ? '/api/status' : '/api/live', needFull ? '完整状态' : '实时状态', 1, needFull ? 45000 : 12000);
+    state = Object.assign(state || {}, data);
+    if (state.config) $('protocolBadge').textContent = `协议 ${state.config.acProtocol} / 型号 ${state.config.acModel}`;
     if (!entries.length) {
       loadMatches();
       loadUnknowns();
@@ -3445,6 +3479,28 @@ async function refresh(){
   } catch(e) {
     $('captureBox').textContent = '状态读取失败：' + e.message;
   }
+}
+function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+async function fetchJsonSafe(url, label='数据', retries=1, timeoutMs=22000){
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = window.AbortController ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : 0;
+    try {
+      const r = await fetch(url, controller ? {signal:controller.signal} : {});
+      const text = await r.text();
+      if (!r.ok) throw new Error(text || `${label}获取失败`);
+      if (!text.trim()) throw new Error(`${label}返回为空`);
+      try { return JSON.parse(text); }
+      catch(parseError) { throw new Error(`${label}JSON不完整，已放弃本次刷新`); }
+    } catch(e) {
+      lastError = e;
+      if (attempt < retries) await wait(450 + attempt * 350);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  throw lastError || new Error(`${label}获取失败`);
 }
 function clearMatches(){
   if (!confirm('清空当前协议/型号的所有匹配标记？')) return;
@@ -3460,7 +3516,7 @@ function clearUnknowns(){
 }
 setupFilters();
 refresh();
-setInterval(refresh, 1000);
+setInterval(refresh, 3000);
 </script>
 </body>
 </html>
@@ -3986,15 +4042,38 @@ function setMsg(text, warn=false){
   $('msg').textContent = text || '';
   $('msg').style.color = warn ? 'var(--danger)' : 'var(--accent)';
 }
+function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+async function fetchTextSafe(url, options={}, label='数据', retries=1, timeoutMs=22000){
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = window.AbortController ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : 0;
+    try {
+      const r = await fetch(url, Object.assign({}, options, controller ? {signal:controller.signal} : {}));
+      const text = await r.text();
+      if (!r.ok) throw new Error(text || `${label}获取失败`);
+      if (!text.trim()) throw new Error(`${label}返回为空`);
+      return text;
+    } catch(e) {
+      lastError = e;
+      if (attempt < retries) await wait(450 + attempt * 350);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  throw lastError || new Error(`${label}获取失败`);
+}
+async function fetchJsonSafe(url, options={}, label='数据', retries=1, timeoutMs=22000){
+  const text = await fetchTextSafe(url, options, label, retries, timeoutMs);
+  try { return JSON.parse(text); }
+  catch(e) { throw new Error(`${label}JSON不完整，已放弃本次刷新`); }
+}
 async function apiPost(url, body){
-  const r = await fetch(url, {
+  return await fetchTextSafe(url, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body)
-  });
-  const text = await r.text();
-  if (!r.ok) throw new Error(text || '操作失败');
-  return text;
+  }, '操作', 1, 25000);
 }
 function renderRemote(){
   $('targetTemp').textContent = remote.temp.toFixed(1);
@@ -4227,8 +4306,7 @@ async function refreshLive(){
   if (liveBusy || statusBusy) return;
   liveBusy = true;
   try {
-    const r = await fetch('/api/live');
-    const state = await r.json();
+    const state = await fetchJsonSafe('/api/live', {}, '实时状态', 1, 12000);
     applyLive(state);
   } catch(e) {
     setMsg('实时状态读取失败', true);
@@ -4241,8 +4319,7 @@ async function refresh(){
   if (statusBusy) return;
   statusBusy = true;
   try {
-    const r = await fetch('/api/status');
-    const state = await r.json();
+    const state = await fetchJsonSafe('/api/status', {}, '完整状态', 1, 45000);
     applyLive(state);
     applyRemoteConfig(state.config);
     renderLearned(state.learned);
@@ -4257,8 +4334,8 @@ async function refresh(){
 loadRemoteState();
 renderRemote();
 refresh();
-setInterval(refreshLive, 1000);
-setInterval(refresh, 15000);
+setInterval(refreshLive, 3000);
+setInterval(refresh, 60000);
 </script>
 </body>
 </html>
@@ -4275,6 +4352,8 @@ float clampFloat(float value, float lower, float upper) {
   if (value > upper) return upper;
   return value;
 }
+
+String smartModeForTarget(float target);
 
 stdAc::opmode_t parseMode(const String &mode) {
   if (mode == "cool") return stdAc::opmode_t::kCool;
@@ -4305,6 +4384,7 @@ void normalizeExclusiveSpecials(bool &turbo, bool &quiet, bool &sleep) {
 }
 
 AcRequest normalizedAcRequest(AcRequest request) {
+  if (request.mode == "smart") request.mode = smartModeForTarget(request.degrees);
   if (!config.capTurbo) request.turbo = false;
   if (!config.capQuiet) request.quiet = false;
   if (!config.capSleep) request.sleep = false;
@@ -4336,6 +4416,10 @@ void normalizePresetCommand(PresetCommand &cmd) {
 }
 
 void normalizeCurveControlConfig() {
+  if (config.autoMode != "smart" && config.autoMode != "cool" && config.autoMode != "auto" &&
+      config.autoMode != "dry" && config.autoMode != "heat" && config.autoMode != "fan") {
+    config.autoMode = "smart";
+  }
   if (config.curveControlMode != "staged" && config.curveControlMode != "fast" &&
       config.curveControlMode != "quiet") {
     config.curveControlMode = "staged";
@@ -4799,10 +4883,17 @@ void swapLearnedCommands(uint8_t a, uint8_t b) {
 bool parseBody(JsonDocument &doc) {
   DeserializationError error = deserializeJson(doc, server.arg("plain"));
   if (error) {
+    server.sendHeader("Connection", "close");
     server.send(400, "text/plain", "Invalid JSON");
     return false;
   }
   return true;
+}
+
+void sendJsonResponse(uint16_t code, const String &out) {
+  server.sendHeader("Connection", "close");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(code, "application/json", out);
 }
 
 void sendOk(const String &message = "ok") {
@@ -4811,7 +4902,7 @@ void sendOk(const String &message = "ok") {
   doc["message"] = message;
   String out;
   serializeJson(doc, out);
-  server.send(200, "application/json", out);
+  sendJsonResponse(200, out);
 }
 
 void sendError(uint16_t code, const String &message) {
@@ -4820,7 +4911,7 @@ void sendError(uint16_t code, const String &message) {
   doc["message"] = message;
   String out;
   serializeJson(doc, out);
-  server.send(code, "application/json", out);
+  sendJsonResponse(code, out);
 }
 
 String jsonString(const String &value) {
@@ -5582,9 +5673,28 @@ String curveStageForElapsed(uint16_t elapsedMinute) {
   return "fast";
 }
 
+bool isHeatCoolMode(const String &mode) {
+  return mode == "heat" || mode == "cool";
+}
+
+String smartModeForTarget(float target) {
+  if (isnan(roomTempC)) return "auto";
+  float switchBand = max(config.deadband, 0.35f);
+  if (target - roomTempC > switchBand) return "heat";
+  if (roomTempC - target > switchBand) return "cool";
+  if (isHeatCoolMode(lastAutoSentMode)) return lastAutoSentMode;
+  return "auto";
+}
+
+String effectiveControlMode(float target, const String &configuredMode) {
+  if (configuredMode == "smart") return smartModeForTarget(target);
+  return configuredMode;
+}
+
 float temperatureDemand(float target, const String &mode) {
   if (isnan(roomTempC)) return 0.0f;
   if (mode == "heat") return target - roomTempC;
+  if (mode == "auto") return fabs(roomTempC - target);
   return roomTempC - target;
 }
 
@@ -5667,13 +5777,14 @@ void runAutoControl() {
   if (pendingAction != PendingAction::None) return;
 
   uint16_t nowMinute = 0;
-  getLocalMinuteOfDay(&nowMinute);
+  bool clockSynced = getLocalMinuteOfDay(&nowMinute);
   uint16_t elapsed = 0;
-  bool curveActive = config.autoEnabled && sleepCurveIsActive(nowMinute, &elapsed);
+  bool curveActive = clockSynced && config.autoEnabled && sleepCurveIsActive(nowMinute, &elapsed);
   if (!curveActive) {
-    if (sleepCurveWasActive && config.curveEndAction == "poweroff") {
+    if (clockSynced && sleepCurveWasActive && config.curveEndAction == "poweroff") {
       pendingAc.power = false;
-      pendingAc.mode = config.autoMode;
+      pendingAc.mode = lastAutoSentMode.length() ? lastAutoSentMode : config.remoteMode;
+      if (pendingAc.mode == "smart") pendingAc.mode = "auto";
       pendingAc.fan = "auto";
       pendingAc.turbo = false;
       pendingAc.quiet = false;
@@ -5689,10 +5800,10 @@ void runAutoControl() {
       lastControlMs = millis();
       sleepCurveWasActive = false;
       return;
-    } else if (sleepCurveWasActive) {
+    } else if (clockSynced && sleepCurveWasActive) {
       addDecisionLog("end_hold", "end", "曲线结束，保持当前空调状态，不发射红外", roomTempC, NAN, NAN);
     }
-    sleepCurveWasActive = false;
+    if (clockSynced) sleepCurveWasActive = false;
     if (!config.humidityControlEnabled) return;
   } else {
     sleepCurveWasActive = true;
@@ -5723,14 +5834,8 @@ void runAutoControl() {
     return;
   }
 
-  if (humidityEnabledNow && humidityHigh && tempTooLowForDry) {
-    String note = "湿度 " + String(roomHumidity, 0) + "% 高于目标，但室温低于目标，暂停除湿避免过冷";
-    addDecisionLog("skip_dehumidify_cold", stage.c_str(), note.c_str(), roomTempC, target, NAN);
-    lastControlMs = millis();
-    return;
-  }
-
-  bool shouldDehumidify = humidityHigh && !tempTooLowForDry;
+  bool dehumidifyBlockedByCold = humidityEnabledNow && humidityHigh && tempTooLowForDry;
+  bool shouldDehumidify = humidityHigh && !dehumidifyBlockedByCold;
   bool shouldTemperatureControl = curveActive || (config.humidityControlEnabled && !curveActive && !tempInBand);
   if (!shouldDehumidify && !shouldTemperatureControl) {
     String note = humidityEnabledNow
@@ -5742,10 +5847,12 @@ void runAutoControl() {
   }
 
   bool quietStage = curveActive ? stage == "quiet" : true;
-  float demand = temperatureDemand(target, shouldDehumidify ? "dry" : (curveActive ? config.autoMode : "auto"));
+  String configuredMode = curveActive ? config.autoMode : "smart";
+  String activeMode = shouldDehumidify ? "dry" : effectiveControlMode(target, configuredMode);
+  float demand = temperatureDemand(target, activeMode);
 
   pendingAc.power = true;
-  pendingAc.mode = shouldDehumidify ? "dry" : (curveActive ? config.autoMode : "auto");
+  pendingAc.mode = activeMode;
   pendingAc.fan = curveActive
                       ? fanForSleepDemand(demand, quietStage, shouldDehumidify)
                       : (shouldDehumidify ? "low" : "auto");
@@ -5755,7 +5862,7 @@ void runAutoControl() {
   pendingAc.swingV = false;
   pendingAc.swingH = false;
   pendingAc.filter = false;
-  pendingAc.degrees = closedLoopSetpoint(target, config.autoMode, stage);
+  pendingAc.degrees = closedLoopSetpoint(target, activeMode, stage);
 
   if (!shouldDehumidify && sameAutoRequestShape(pendingAc)) {
     String predictiveReason;
@@ -5785,6 +5892,8 @@ void runAutoControl() {
   String note = shouldDehumidify
                     ? "已排队除湿：湿度 " + String(roomHumidity, 0) + "% / 目标 " + String(config.targetHumidity, 0) + "%"
                     : "已排队发送温度控制指令";
+  if (dehumidifyBlockedByCold) note += "，湿度偏高但室温偏低，先控温再除湿";
+  if (configuredMode == "smart" && !shouldDehumidify) note += "，智能模式判定为 " + pendingAc.mode;
   note += "，风速 " + pendingAc.fan + (pendingAc.quiet ? " / 静音" : "") +
           (pendingAc.turbo ? " / 强劲" : "") +
           "，温差 " + String(demand, 1) + "℃";
@@ -5875,11 +5984,12 @@ void addLiveToJson(JsonDocument &doc) {
   clock["minuteOfDay"] = minuteOfDay;
 
   uint16_t elapsed = 0;
-  bool curveActive = config.autoEnabled && sleepCurveIsActive(minuteOfDay, &elapsed);
+  bool curveActive = timeSynced && config.autoEnabled && sleepCurveIsActive(minuteOfDay, &elapsed);
   JsonObject autoTarget = doc["autoTarget"].to<JsonObject>();
   autoTarget["enabled"] = config.autoEnabled;
   autoTarget["active"] = curveActive || config.humidityControlEnabled;
   autoTarget["curveActive"] = curveActive;
+  autoTarget["configuredMode"] = config.autoMode;
   autoTarget["mode"] = config.autoMode;
   autoTarget["endAction"] = config.curveEndAction;
   autoTarget["humidityControlEnabled"] = config.humidityControlEnabled;
@@ -5893,21 +6003,33 @@ void addLiveToJson(JsonDocument &doc) {
     float target = clampFloat(targetTempForSleepCurve(elapsed), config.minSetpoint, config.maxSetpoint);
     String stage = curveStageForElapsed(elapsed);
     bool quietStage = stage == "quiet";
-    float demand = temperatureDemand(target, config.autoMode);
+    bool humidityHigh = config.curveHumidityEnabled && !isnan(roomHumidity) &&
+                        roomHumidity > config.targetHumidity + config.humidityDeadband;
+    bool tempTooLowForDry = humidityHigh && !isnan(roomTempC) &&
+                            roomTempC < target - max(0.5f, config.deadband);
+    String activeMode = humidityHigh && !tempTooLowForDry ? "dry" : effectiveControlMode(target, config.autoMode);
+    float demand = temperatureDemand(target, activeMode);
+    autoTarget["mode"] = activeMode;
     autoTarget["elapsedMinute"] = elapsed;
     autoTarget["temperatureC"] = target;
-    autoTarget["setpointC"] = closedLoopSetpoint(target, config.autoMode, stage);
+    autoTarget["setpointC"] = closedLoopSetpoint(target, activeMode, stage);
     autoTarget["roomErrorC"] = isnan(roomTempC) ? 0 : roomTempC - target;
     autoTarget["stage"] = stage;
-    autoTarget["fan"] = fanForSleepDemand(demand, quietStage, false);
-    autoTarget["turbo"] = turboForSleepDemand(demand, quietStage, false);
+    autoTarget["fan"] = fanForSleepDemand(demand, quietStage, activeMode == "dry");
+    autoTarget["turbo"] = turboForSleepDemand(demand, quietStage, activeMode == "dry");
     autoTarget["quiet"] = quietForSleepDemand(quietStage, true);
     autoTarget["sleep"] = false;
   } else if (config.humidityControlEnabled) {
     float target = clampFloat(config.humidityTargetTemp, config.minSetpoint, config.maxSetpoint);
+    bool humidityHigh = !isnan(roomHumidity) &&
+                        roomHumidity > config.targetHumidity + config.humidityDeadband;
+    bool tempTooLowForDry = humidityHigh && !isnan(roomTempC) &&
+                            roomTempC < target - max(0.5f, config.deadband);
+    String activeMode = humidityHigh && !tempTooLowForDry ? "dry" : effectiveControlMode(target, "smart");
+    autoTarget["mode"] = activeMode;
     autoTarget["elapsedMinute"] = nullptr;
     autoTarget["temperatureC"] = target;
-    autoTarget["setpointC"] = closedLoopSetpoint(target, "auto", "humidity");
+    autoTarget["setpointC"] = closedLoopSetpoint(target, activeMode, "humidity");
     autoTarget["roomErrorC"] = isnan(roomTempC) ? 0 : roomTempC - target;
     autoTarget["stage"] = "humidity";
     autoTarget["fan"] = "low";
@@ -5945,37 +6067,37 @@ void handleLive() {
 
   String out;
   serializeJson(doc, out);
-  server.send(200, "application/json", out);
+  sendJsonResponse(200, out);
 }
 
 void handleTempHistory() {
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.send(200, "application/json", "");
-  server.sendContent("{\"intervalSec\":60,\"hours\":72,\"usesEpoch\":");
-  server.sendContent(tempHistoryUsesEpoch ? "true" : "false");
-  server.sendContent(",\"persistent\":true");
-  server.sendContent(",\"count\":");
-  server.sendContent(String(tempHistoryCount));
-  server.sendContent(",\"samples\":[");
+  String out;
+  out.reserve(180 + static_cast<uint32_t>(tempHistoryCount) * 48U);
+  out += "{\"intervalSec\":60,\"hours\":72,\"usesEpoch\":";
+  out += tempHistoryUsesEpoch ? "true" : "false";
+  out += ",\"persistent\":true";
+  out += ",\"count\":";
+  out += String(tempHistoryCount);
+  out += ",\"samples\":[";
 
   for (uint16_t i = 0; i < tempHistoryCount; i++) {
     uint16_t idx = (tempHistoryHead + kTempHistoryPoints - tempHistoryCount + i) % kTempHistoryPoints;
-    if (i > 0) server.sendContent(",");
+    if (i > 0) out += ",";
     char buffer[72];
     snprintf(buffer, sizeof(buffer), "{\"minute\":%lu,\"temp\":%.1f,\"humidity\":",
              static_cast<unsigned long>(tempHistory[idx].minute),
              tempHistory[idx].temp10 / 10.0f);
-    server.sendContent(buffer);
+    out += buffer;
     if (tempHistory[idx].humidity10 == INT16_MIN) {
-      server.sendContent("null");
+      out += "null";
     } else {
-      server.sendContent(String(tempHistory[idx].humidity10 / 10.0f, 1));
+      out += String(tempHistory[idx].humidity10 / 10.0f, 1);
     }
-    server.sendContent("}");
+    out += "}";
   }
 
-  server.sendContent("]}");
-  server.sendContent("");
+  out += "]}";
+  sendJsonResponse(200, out);
 }
 
 void sendJsonTenths(const char *name, int16_t value, bool leadingComma = true) {
@@ -6021,44 +6143,44 @@ void appendJsonTenths(String &out, const char *name, int16_t value) {
 }
 
 void handleControlEvents() {
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.send(200, "application/json", "");
-  server.sendContent("{\"usesEpoch\":");
-  server.sendContent(controlEventsUseEpoch ? "true" : "false");
-  server.sendContent(",\"persistent\":true,\"capacity\":");
-  server.sendContent(String(kControlEventPoints));
-  server.sendContent(",\"count\":");
-  server.sendContent(String(controlEventCount));
-  server.sendContent(",\"events\":[");
+  String out;
+  out.reserve(160 + static_cast<uint32_t>(controlEventCount) * 160U);
+  out += "{\"usesEpoch\":";
+  out += controlEventsUseEpoch ? "true" : "false";
+  out += ",\"persistent\":true,\"capacity\":";
+  out += String(kControlEventPoints);
+  out += ",\"count\":";
+  out += String(controlEventCount);
+  out += ",\"events\":[";
   for (uint16_t i = 0; i < controlEventCount; i++) {
     uint16_t idx = (controlEventHead + kControlEventPoints - controlEventCount + i) % kControlEventPoints;
     const ControlEvent &event = controlEvents[idx];
-    if (i > 0) server.sendContent(",");
-    server.sendContent("{\"minute\":");
-    server.sendContent(String(event.minute));
-    sendJsonTenths("room", event.room10);
-    sendJsonTenths("target", event.target10);
-    sendJsonTenths("setpoint", event.setpoint10);
-    server.sendContent(",\"source\":\"");
-    server.sendContent(event.source);
-    server.sendContent("\",\"action\":\"");
-    server.sendContent(event.action);
-    server.sendContent("\",\"mode\":\"");
-    server.sendContent(event.mode);
-    server.sendContent("\",\"fan\":\"");
-    server.sendContent(event.fan);
-    server.sendContent("\",\"power\":");
-    server.sendContent(event.power ? "true" : "false");
-    server.sendContent(",\"turbo\":");
-    server.sendContent(event.turbo ? "true" : "false");
-    server.sendContent(",\"quiet\":");
-    server.sendContent(event.quiet ? "true" : "false");
-    server.sendContent(",\"sleep\":");
-    server.sendContent(event.sleep ? "true" : "false");
-    server.sendContent("}");
+    if (i > 0) out += ",";
+    out += "{\"minute\":";
+    out += String(event.minute);
+    appendJsonTenths(out, "room", event.room10);
+    appendJsonTenths(out, "target", event.target10);
+    appendJsonTenths(out, "setpoint", event.setpoint10);
+    out += ",\"source\":";
+    appendJsonEscaped(out, event.source);
+    out += ",\"action\":";
+    appendJsonEscaped(out, event.action);
+    out += ",\"mode\":";
+    appendJsonEscaped(out, event.mode);
+    out += ",\"fan\":";
+    appendJsonEscaped(out, event.fan);
+    out += ",\"power\":";
+    out += event.power ? "true" : "false";
+    out += ",\"turbo\":";
+    out += event.turbo ? "true" : "false";
+    out += ",\"quiet\":";
+    out += event.quiet ? "true" : "false";
+    out += ",\"sleep\":";
+    out += event.sleep ? "true" : "false";
+    out += "}";
   }
-  server.sendContent("]}");
-  server.sendContent("");
+  out += "]}";
+  sendJsonResponse(200, out);
 }
 
 void handleControlLog() {
@@ -6089,7 +6211,7 @@ void handleControlLog() {
     out += "}";
   }
   out += "]}";
-  server.send(200, "application/json", out);
+  sendJsonResponse(200, out);
 }
 
 void handleStatus() {
@@ -6142,7 +6264,7 @@ void handleStatus() {
 
   String out;
   serializeJson(doc, out);
-  server.send(200, "application/json", out);
+  sendJsonResponse(200, out);
 }
 
 void handleWifiPost() {
@@ -6261,7 +6383,7 @@ void handleWifiScan() {
 
   WiFi.scanDelete();
   String out = "{\"count\":" + String(emittedCount) + ",\"networks\":[" + networks + "]}";
-  server.send(200, "application/json", out);
+  sendJsonResponse(200, out);
 }
 
 void handleWifiForget() {
@@ -6692,7 +6814,7 @@ void handleConfigExport() {
   String out;
   serializeJson(doc, out);
   server.sendHeader("Content-Disposition", "attachment; filename=ir-ac-config.json");
-  server.send(200, "application/json", out);
+  sendJsonResponse(200, out);
 }
 
 void handleConfigImport() {
@@ -6736,11 +6858,11 @@ void handleConfigImport() {
 void handleOtaFinish() {
   bool ok = !Update.hasError();
   if (ok) {
-    server.send(200, "application/json", "{\"ok\":true,\"message\":\"ota uploaded, restarting\"}");
+    sendJsonResponse(200, "{\"ok\":true,\"message\":\"ota uploaded, restarting\"}");
     delay(300);
     ESP.restart();
   } else {
-    server.send(500, "application/json", "{\"ok\":false,\"message\":\"ota failed\"}");
+    sendJsonResponse(500, "{\"ok\":false,\"message\":\"ota failed\"}");
   }
 }
 
