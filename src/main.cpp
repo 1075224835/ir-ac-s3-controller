@@ -1200,13 +1200,10 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     <div class="section-head">
       <div>
         <h2>空调控制</h2>
-        <div class="subhead">优先使用内置协议库发送；如果协议不匹配，可以在下方保存原始红外命令作为自建库。</div>
+        <div class="subhead">使用已保存的遥控协议发送；如果协议不匹配，可以在下方保存原始红外命令作为自建库。</div>
       </div>
-      <div class="badge" id="protocolBadge">协议读取中</div>
     </div>
     <div class="form-grid">
-      <label>协议<select id="protocol"></select></label>
-      <label>型号<input id="model" type="number" min="1" value="1"></label>
       <label>电源<select id="power"><option value="true">开机</option><option value="false">关机</option></select></label>
       <label>模式<select id="mode"><option value="cool">制冷</option><option value="auto">自动</option><option value="dry">除湿</option><option value="heat">制热</option><option value="fan">送风</option></select></label>
       <label>设定温度<input id="degrees" type="number" step="0.5" min="16" max="32" value="26"></label>
@@ -1241,7 +1238,6 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     </div>
     <div class="actions">
       <button onclick="sendAc()">立即发送</button>
-      <button class="secondary" onclick="saveAcConfig()">保存协议配置</button>
     </div>
     <div class="preset-panel">
       <div class="preset-head">
@@ -1362,6 +1358,15 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       <div class="badge" id="settingsBadge">待保存</div>
     </div>
     <div class="settings-panel">
+      <h3>遥控协议</h3>
+      <div class="form-grid">
+        <label>协议<select id="protocol"></select></label>
+        <label>型号<input id="model" type="number" min="1" value="1"></label>
+      </div>
+      <div class="mini-actions">
+        <button class="secondary" type="button" onclick="saveAcConfig()">保存空调协议/型号</button>
+        <span class="badge" id="protocolBadge">协议读取中</span>
+      </div>
       <h3>传感器校准</h3>
       <div class="form-grid">
         <label>室温修正 ℃<input id="sensorTempOffset" type="number" step="0.1" min="-5" max="5" value="0"></label>
@@ -2857,7 +2862,7 @@ async function refresh(force=false){
   try {
     state = await fetchJsonSafe('/api/status', {}, '完整状态', 1, 45000);
     applyLive(state);
-    $('protocolBadge').textContent = state.config && state.config.acProtocol ? ('当前 ' + state.config.acProtocol) : '协议未配置';
+    $('protocolBadge').textContent = state.config && state.config.acProtocol ? (`当前 ${state.config.acProtocol} / 型号 ${state.config.acModel || 1}`) : '协议未配置';
     $('curveBadge').textContent = state.config && state.config.autoEnabled ? '自动控制已开启' : '自动控制关闭';
 
     setValue('staSsid', state.config.staSsid || '', force);
@@ -2977,7 +2982,7 @@ async function forgetWifi(){
 }
 async function saveAcConfig(){
   try {
-    await post('/api/ac-config', {protocol:$('protocol').value, model:Number($('model').value)}, '空调协议配置已保存', ['protocol','model']);
+    await post('/api/ac-config', {protocol:$('protocol').value, model:Number($('model').value)}, '空调协议/型号已保存', ['protocol','model']);
   } catch(e) { msg(e.message || '配置保存失败', true); }
 }
 async function sendAc(){
