@@ -1764,16 +1764,38 @@ function formatHistoryLabel(minute, usesEpoch, latestMinute){
   const d = new Date(Date.now() - Math.max(0, latestMinute - minute) * 60000);
   return `${String(d.getMonth() + 1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
+function normalizeHistorySamples(data){
+  if (!data) return [];
+  if (Array.isArray(data.samples)) {
+    return data.samples.map(p => {
+      const humidity = Number(p.humidity);
+      return {minute:Number(p.minute), temp:Number(p.temp), humidity:Number.isFinite(humidity) ? humidity : null};
+    }).filter(p => Number.isFinite(p.minute) && Number.isFinite(p.temp));
+  }
+  const minutes = Array.isArray(data.m) ? data.m : (Array.isArray(data.minutes) ? data.minutes : []);
+  const temps = Array.isArray(data.t) ? data.t : (Array.isArray(data.temps10) ? data.temps10 : []);
+  const humidities = Array.isArray(data.h) ? data.h : (Array.isArray(data.humidity10) ? data.humidity10 : []);
+  const count = Math.min(minutes.length, temps.length);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const minute = Number(minutes[i]);
+    const temp10 = Number(temps[i]);
+    const humidityRaw = humidities[i];
+    const humidity10 = humidityRaw === null || humidityRaw === undefined || humidityRaw === '' ? NaN : Number(humidityRaw);
+    if (!Number.isFinite(minute) || !Number.isFinite(temp10)) continue;
+    out.push({
+      minute,
+      temp: temp10 / 10,
+      humidity: Number.isFinite(humidity10) ? humidity10 / 10 : null
+    });
+  }
+  return out;
+}
 function renderTempHistory(data=null){
   const svg = $('tempHistorySvg');
   if (!svg) return;
   if (data) {
-    tempHistoryState.samples = (Array.isArray(data.samples) ? data.samples : [])
-      .map(p => {
-        const humidity = Number(p.humidity);
-        return {minute:Number(p.minute), temp:Number(p.temp), humidity:Number.isFinite(humidity) ? humidity : null};
-      })
-      .filter(p => Number.isFinite(p.minute) && Number.isFinite(p.temp));
+    tempHistoryState.samples = normalizeHistorySamples(data);
     tempHistoryState.usesEpoch = !!data.usesEpoch;
     if (Array.isArray(data.events)) {
       tempHistoryState.events = data.events
@@ -4896,6 +4918,17 @@ void sendJsonResponse(uint16_t code, const String &out) {
   server.send(code, "application/json", out);
 }
 
+void flushJsonStreamChunk(String &chunk) {
+  if (!chunk.length()) return;
+  server.sendContent(chunk);
+  chunk = "";
+}
+
+void appendJsonStreamChunk(String &chunk, const String &part) {
+  if (chunk.length() + part.length() > 960) flushJsonStreamChunk(chunk);
+  chunk += part;
+}
+
 void sendOk(const String &message = "ok") {
   JsonDocument doc;
   doc["ok"] = true;
@@ -6071,33 +6104,45 @@ void handleLive() {
 }
 
 void handleTempHistory() {
-  String out;
-  out.reserve(180 + static_cast<uint32_t>(tempHistoryCount) * 48U);
-  out += "{\"intervalSec\":60,\"hours\":72,\"usesEpoch\":";
-  out += tempHistoryUsesEpoch ? "true" : "false";
-  out += ",\"persistent\":true";
-  out += ",\"count\":";
-  out += String(tempHistoryCount);
-  out += ",\"samples\":[";
+  server.sendHeader("Connection", "close");
+  server.sendHeader("Cache-Control", "no-store");
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  String chunk;
+  chunk.reserve(1024);
+  appendJsonStreamChunk(chunk, "{\"version\":3,\"intervalSec\":60,\"hours\":72,\"usesEpoch\":");
+  appendJsonStreamChunk(chunk, tempHistoryUsesEpoch ? "true" : "false");
+  appendJsonStreamChunk(chunk, ",\"persistent\":true,\"count\":");
+  appendJsonStreamChunk(chunk, String(tempHistoryCount));
 
+  appendJsonStreamChunk(chunk, ",\"m\":[");
   for (uint16_t i = 0; i < tempHistoryCount; i++) {
     uint16_t idx = (tempHistoryHead + kTempHistoryPoints - tempHistoryCount + i) % kTempHistoryPoints;
-    if (i > 0) out += ",";
-    char buffer[72];
-    snprintf(buffer, sizeof(buffer), "{\"minute\":%lu,\"temp\":%.1f,\"humidity\":",
-             static_cast<unsigned long>(tempHistory[idx].minute),
-             tempHistory[idx].temp10 / 10.0f);
-    out += buffer;
-    if (tempHistory[idx].humidity10 == INT16_MIN) {
-      out += "null";
-    } else {
-      out += String(tempHistory[idx].humidity10 / 10.0f, 1);
-    }
-    out += "}";
+    if (i > 0) appendJsonStreamChunk(chunk, ",");
+    appendJsonStreamChunk(chunk, String(static_cast<unsigned long>(tempHistory[idx].minute)));
   }
 
-  out += "]}";
-  sendJsonResponse(200, out);
+  appendJsonStreamChunk(chunk, "],\"t\":[");
+  for (uint16_t i = 0; i < tempHistoryCount; i++) {
+    uint16_t idx = (tempHistoryHead + kTempHistoryPoints - tempHistoryCount + i) % kTempHistoryPoints;
+    if (i > 0) appendJsonStreamChunk(chunk, ",");
+    appendJsonStreamChunk(chunk, String(static_cast<int>(tempHistory[idx].temp10)));
+  }
+
+  appendJsonStreamChunk(chunk, "],\"h\":[");
+  for (uint16_t i = 0; i < tempHistoryCount; i++) {
+    uint16_t idx = (tempHistoryHead + kTempHistoryPoints - tempHistoryCount + i) % kTempHistoryPoints;
+    if (i > 0) appendJsonStreamChunk(chunk, ",");
+    if (tempHistory[idx].humidity10 == INT16_MIN) {
+      appendJsonStreamChunk(chunk, "null");
+    } else {
+      appendJsonStreamChunk(chunk, String(static_cast<int>(tempHistory[idx].humidity10)));
+    }
+  }
+
+  appendJsonStreamChunk(chunk, "]}");
+  flushJsonStreamChunk(chunk);
+  server.sendContent("");
 }
 
 void sendJsonTenths(const char *name, int16_t value, bool leadingComma = true) {
