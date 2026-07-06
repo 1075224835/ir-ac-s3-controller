@@ -378,18 +378,18 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       color: #172845;
       text-transform: none;
     }
-    body[data-skin="bluehome"] main > section:nth-of-type(1),
-    body[data-skin="bluehome"] main > section:nth-of-type(4),
-    body[data-skin="bluehome"] main > section:nth-of-type(5),
-    body[data-skin="bluehome"] main > section:nth-of-type(8) {
+    body[data-skin="bluehome"] main > section[data-section-key="status"],
+    body[data-skin="bluehome"] main > section[data-section-key="history"],
+    body[data-skin="bluehome"] main > section[data-section-key="sleep"],
+    body[data-skin="bluehome"] main > section[data-section-key="control"],
+    body[data-skin="bluehome"] main > section[data-section-key="log"],
+    body[data-skin="bluehome"] main > section[data-section-key="wifi"] {
       grid-column: 1 / -1;
     }
-    body[data-skin="bluehome"] main > section:nth-of-type(2),
-    body[data-skin="bluehome"] main > section:nth-of-type(6) {
+    body[data-skin="bluehome"] main > section[data-section-key="settings"] {
       grid-column: 1 / 2;
     }
-    body[data-skin="bluehome"] main > section:nth-of-type(3),
-    body[data-skin="bluehome"] main > section:nth-of-type(7) {
+    body[data-skin="bluehome"] main > section[data-section-key="learn"] {
       grid-column: 2 / 3;
     }
     body[data-skin="bluehome"] .status-grid {
@@ -1187,7 +1187,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     <div class="message" id="msg">正在读取状态...</div>
   </header>
 
-  <section>
+  <section data-section-key="status">
     <div class="status-grid">
       <div class="metric"><div class="label">室温</div><div id="temp" class="value">--</div></div>
       <div class="metric"><div class="label">湿度</div><div id="hum" class="value">--</div></div>
@@ -1196,7 +1196,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     </div>
   </section>
 
-  <section>
+  <section data-section-key="control">
     <div class="section-head">
       <div>
         <h2>空调控制</h2>
@@ -1251,7 +1251,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     </div>
   </section>
 
-  <section>
+  <section data-section-key="learn">
     <div class="section-head">
       <div>
         <h2>红外学习库</h2>
@@ -1286,7 +1286,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     </div>
   </section>
 
-  <section>
+  <section data-section-key="sleep">
     <div class="section-head">
       <div>
         <h2>睡眠温度曲线</h2>
@@ -1349,7 +1349,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     <label style="margin-top:14px">曲线 JSON<textarea id="curve" rows="5">[{"minute":0,"temp":27},{"minute":90,"temp":26.5},{"minute":300,"temp":25.5},{"minute":480,"temp":26.5}]</textarea></label>
   </section>
 
-  <section>
+  <section data-section-key="settings">
     <div class="section-head">
       <div>
         <h2>维护与闭环设置</h2>
@@ -1399,7 +1399,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     </div>
   </section>
 
-  <section>
+  <section data-section-key="log">
     <div class="section-head">
       <div>
         <h2>控制事件日志</h2>
@@ -1428,7 +1428,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     <div class="control-log" id="controlLog"><div class="empty">暂无决策日志</div></div>
   </section>
 
-  <section>
+  <section data-section-key="wifi">
     <div class="section-head">
       <div>
         <h2>WiFi 配网</h2>
@@ -1606,7 +1606,7 @@ function ensureTempHistorySection(){
   const statusSection = document.querySelector('main > section');
   if (!statusSection) return;
   statusSection.insertAdjacentHTML('afterend', `
-    <section>
+    <section data-section-key="history">
       <div class="section-head">
         <div>
           <h2>72小时温湿度曲线</h2>
@@ -1625,16 +1625,17 @@ function ensureTempHistorySection(){
 function orderMainSections(){
   const main = document.querySelector('main');
   if (!main) return;
-  const desired = [
-    '当前状态',
-    '72小时温湿度曲线',
-    '睡眠温度曲线',
-    '空调控制',
-    '控制事件日志',
-    '维护与闭环设置',
-    '红外学习库',
-    'WiFi 配网'
-  ];
+  const desiredKeys = ['status','history','sleep','control','log','settings','learn','wifi'];
+  const titleKeys = {
+    '当前状态':'status',
+    '72小时温湿度曲线':'history',
+    '睡眠温度曲线':'sleep',
+    '空调控制':'control',
+    '控制事件日志':'log',
+    '维护与闭环设置':'settings',
+    '红外学习库':'learn',
+    'WiFi 配网':'wifi'
+  };
   const sectionTitle = section => {
     const h2 = section.querySelector(':scope > .section-head h2');
     if (h2) return h2.textContent.trim();
@@ -1643,9 +1644,10 @@ function orderMainSections(){
   };
   const sections = Array.from(main.querySelectorAll(':scope > section'));
   const ranked = sections.map((section, index) => {
-    const title = sectionTitle(section);
-    const order = desired.indexOf(title);
-    return {section, index, order: order >= 0 ? order : desired.length + index};
+    const key = section.dataset.sectionKey || titleKeys[sectionTitle(section)] || '';
+    if (key) section.dataset.sectionKey = key;
+    const order = desiredKeys.indexOf(key);
+    return {section, index, order: order >= 0 ? order : desiredKeys.length + index};
   });
   ranked.sort((a, b) => a.order - b.order || a.index - b.index);
   ranked.forEach(item => main.appendChild(item.section));
