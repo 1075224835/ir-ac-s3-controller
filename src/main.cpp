@@ -207,14 +207,14 @@ bool tempHistoryUsesEpoch = false;
 bool tempHistoryDirty = false;
 uint16_t unsavedTempHistorySamples = 0;
 uint32_t lastTempHistorySaveMs = 0;
-constexpr uint16_t kControlEventPoints = 160;
+constexpr uint16_t kControlEventPoints = 500;
 constexpr char kControlEventsPath[] = "/control_events.csv";
 ControlEvent controlEvents[kControlEventPoints];
 uint16_t controlEventHead = 0;
 uint16_t controlEventCount = 0;
 bool controlEventsUseEpoch = false;
-constexpr uint16_t kDecisionLogPoints = 192;
-constexpr uint32_t kDecisionLogMaxFileBytes = 96UL * 1024UL;
+constexpr uint16_t kDecisionLogPoints = 500;
+constexpr uint32_t kDecisionLogMaxFileBytes = 256UL * 1024UL;
 constexpr char kDecisionLogPath[] = "/decision_log.csv";
 DecisionLogEntry decisionLog[kDecisionLogPoints];
 uint16_t decisionLogHead = 0;
@@ -5107,6 +5107,52 @@ void appendJsonStreamChunk(String &chunk, const String &part) {
   chunk += part;
 }
 
+void appendJsonStreamChar(String &chunk, char c) {
+  if (chunk.length() + 1 > 960) flushJsonStreamChunk(chunk);
+  chunk += c;
+}
+
+void beginJsonStreamResponse() {
+  server.sendHeader("Connection", "close");
+  server.sendHeader("Cache-Control", "no-store");
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+}
+
+void appendJsonEscapedStream(String &chunk, const char *text) {
+  appendJsonStreamChunk(chunk, "\"");
+  if (text != nullptr) {
+    for (const char *p = text; *p != '\0'; p++) {
+      char c = *p;
+      if (c == '"' || c == '\\') {
+        appendJsonStreamChar(chunk, '\\');
+        appendJsonStreamChar(chunk, c);
+      } else if (c == '\n') {
+        appendJsonStreamChunk(chunk, "\\n");
+      } else if (c == '\r') {
+        appendJsonStreamChunk(chunk, "\\r");
+      } else if (static_cast<uint8_t>(c) < 0x20) {
+        appendJsonStreamChar(chunk, ' ');
+      } else {
+        appendJsonStreamChar(chunk, c);
+      }
+    }
+  }
+  appendJsonStreamChunk(chunk, "\"");
+}
+
+void appendJsonTenthsStream(String &chunk, const char *name, int16_t value, bool leadingComma = true) {
+  if (leadingComma) appendJsonStreamChunk(chunk, ",");
+  appendJsonStreamChunk(chunk, "\"");
+  appendJsonStreamChunk(chunk, name);
+  appendJsonStreamChunk(chunk, "\":");
+  if (value == INT16_MIN) {
+    appendJsonStreamChunk(chunk, "null");
+  } else {
+    appendJsonStreamChunk(chunk, String(value / 10.0f, 1));
+  }
+}
+
 void sendOk(const String &message = "ok") {
   JsonDocument doc;
   doc["ok"] = true;
@@ -6398,75 +6444,79 @@ void appendJsonTenths(String &out, const char *name, int16_t value) {
 }
 
 void handleControlEvents() {
-  String out;
-  out.reserve(160 + static_cast<uint32_t>(controlEventCount) * 160U);
-  out += "{\"usesEpoch\":";
-  out += controlEventsUseEpoch ? "true" : "false";
-  out += ",\"persistent\":true,\"capacity\":";
-  out += String(kControlEventPoints);
-  out += ",\"count\":";
-  out += String(controlEventCount);
-  out += ",\"events\":[";
+  beginJsonStreamResponse();
+  String chunk;
+  chunk.reserve(1024);
+  appendJsonStreamChunk(chunk, "{\"usesEpoch\":");
+  appendJsonStreamChunk(chunk, controlEventsUseEpoch ? "true" : "false");
+  appendJsonStreamChunk(chunk, ",\"persistent\":true,\"capacity\":");
+  appendJsonStreamChunk(chunk, String(kControlEventPoints));
+  appendJsonStreamChunk(chunk, ",\"count\":");
+  appendJsonStreamChunk(chunk, String(controlEventCount));
+  appendJsonStreamChunk(chunk, ",\"events\":[");
   for (uint16_t i = 0; i < controlEventCount; i++) {
     uint16_t idx = (controlEventHead + kControlEventPoints - controlEventCount + i) % kControlEventPoints;
     const ControlEvent &event = controlEvents[idx];
-    if (i > 0) out += ",";
-    out += "{\"minute\":";
-    out += String(event.minute);
-    appendJsonTenths(out, "room", event.room10);
-    appendJsonTenths(out, "target", event.target10);
-    appendJsonTenths(out, "setpoint", event.setpoint10);
-    out += ",\"source\":";
-    appendJsonEscaped(out, event.source);
-    out += ",\"action\":";
-    appendJsonEscaped(out, event.action);
-    out += ",\"mode\":";
-    appendJsonEscaped(out, event.mode);
-    out += ",\"fan\":";
-    appendJsonEscaped(out, event.fan);
-    out += ",\"power\":";
-    out += event.power ? "true" : "false";
-    out += ",\"turbo\":";
-    out += event.turbo ? "true" : "false";
-    out += ",\"quiet\":";
-    out += event.quiet ? "true" : "false";
-    out += ",\"sleep\":";
-    out += event.sleep ? "true" : "false";
-    out += "}";
+    if (i > 0) appendJsonStreamChunk(chunk, ",");
+    appendJsonStreamChunk(chunk, "{\"minute\":");
+    appendJsonStreamChunk(chunk, String(event.minute));
+    appendJsonTenthsStream(chunk, "room", event.room10);
+    appendJsonTenthsStream(chunk, "target", event.target10);
+    appendJsonTenthsStream(chunk, "setpoint", event.setpoint10);
+    appendJsonStreamChunk(chunk, ",\"source\":");
+    appendJsonEscapedStream(chunk, event.source);
+    appendJsonStreamChunk(chunk, ",\"action\":");
+    appendJsonEscapedStream(chunk, event.action);
+    appendJsonStreamChunk(chunk, ",\"mode\":");
+    appendJsonEscapedStream(chunk, event.mode);
+    appendJsonStreamChunk(chunk, ",\"fan\":");
+    appendJsonEscapedStream(chunk, event.fan);
+    appendJsonStreamChunk(chunk, ",\"power\":");
+    appendJsonStreamChunk(chunk, event.power ? "true" : "false");
+    appendJsonStreamChunk(chunk, ",\"turbo\":");
+    appendJsonStreamChunk(chunk, event.turbo ? "true" : "false");
+    appendJsonStreamChunk(chunk, ",\"quiet\":");
+    appendJsonStreamChunk(chunk, event.quiet ? "true" : "false");
+    appendJsonStreamChunk(chunk, ",\"sleep\":");
+    appendJsonStreamChunk(chunk, event.sleep ? "true" : "false");
+    appendJsonStreamChunk(chunk, "}");
   }
-  out += "]}";
-  sendJsonResponse(200, out);
+  appendJsonStreamChunk(chunk, "]}");
+  flushJsonStreamChunk(chunk);
+  server.sendContent("");
 }
 
 void handleControlLog() {
-  String out;
-  out.reserve(160 + static_cast<uint32_t>(decisionLogCount) * 240U);
-  out += "{\"usesEpoch\":";
-  out += decisionLogUsesEpoch ? "true" : "false";
-  out += ",\"persistent\":true,\"capacity\":";
-  out += String(kDecisionLogPoints);
-  out += ",\"count\":";
-  out += String(decisionLogCount);
-  out += ",\"logs\":[";
+  beginJsonStreamResponse();
+  String chunk;
+  chunk.reserve(1024);
+  appendJsonStreamChunk(chunk, "{\"usesEpoch\":");
+  appendJsonStreamChunk(chunk, decisionLogUsesEpoch ? "true" : "false");
+  appendJsonStreamChunk(chunk, ",\"persistent\":true,\"capacity\":");
+  appendJsonStreamChunk(chunk, String(kDecisionLogPoints));
+  appendJsonStreamChunk(chunk, ",\"count\":");
+  appendJsonStreamChunk(chunk, String(decisionLogCount));
+  appendJsonStreamChunk(chunk, ",\"logs\":[");
   for (uint16_t i = 0; i < decisionLogCount; i++) {
     uint16_t idx = (decisionLogHead + kDecisionLogPoints - decisionLogCount + i) % kDecisionLogPoints;
     const DecisionLogEntry &entry = decisionLog[idx];
-    if (i > 0) out += ",";
-    out += "{\"minute\":";
-    out += String(entry.minute);
-    out += ",\"action\":";
-    appendJsonEscaped(out, entry.action);
-    out += ",\"stage\":";
-    appendJsonEscaped(out, entry.stage);
-    out += ",\"note\":";
-    appendJsonEscaped(out, entry.note);
-    appendJsonTenths(out, "room", entry.room10);
-    appendJsonTenths(out, "target", entry.target10);
-    appendJsonTenths(out, "setpoint", entry.setpoint10);
-    out += "}";
+    if (i > 0) appendJsonStreamChunk(chunk, ",");
+    appendJsonStreamChunk(chunk, "{\"minute\":");
+    appendJsonStreamChunk(chunk, String(entry.minute));
+    appendJsonStreamChunk(chunk, ",\"action\":");
+    appendJsonEscapedStream(chunk, entry.action);
+    appendJsonStreamChunk(chunk, ",\"stage\":");
+    appendJsonEscapedStream(chunk, entry.stage);
+    appendJsonStreamChunk(chunk, ",\"note\":");
+    appendJsonEscapedStream(chunk, entry.note);
+    appendJsonTenthsStream(chunk, "room", entry.room10);
+    appendJsonTenthsStream(chunk, "target", entry.target10);
+    appendJsonTenthsStream(chunk, "setpoint", entry.setpoint10);
+    appendJsonStreamChunk(chunk, "}");
   }
-  out += "]}";
-  sendJsonResponse(200, out);
+  appendJsonStreamChunk(chunk, "]}");
+  flushJsonStreamChunk(chunk);
+  server.sendContent("");
 }
 
 void handleStatus() {
