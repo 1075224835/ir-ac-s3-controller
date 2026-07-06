@@ -213,6 +213,8 @@ uint16_t controlEventHead = 0;
 uint16_t controlEventCount = 0;
 bool controlEventsUseEpoch = false;
 constexpr uint16_t kDecisionLogPoints = 192;
+constexpr uint32_t kDecisionLogMaxFileBytes = 96UL * 1024UL;
+constexpr char kDecisionLogPath[] = "/decision_log.csv";
 DecisionLogEntry decisionLog[kDecisionLogPoints];
 uint16_t decisionLogHead = 0;
 uint16_t decisionLogCount = 0;
@@ -1447,7 +1449,7 @@ const historyView = {w:720, h:260, l:50, r:52, t:18, b:38};
 let tempHistoryRefreshInFlight = false;
 let controlLogRefreshInFlight = false;
 const tempHistoryState = {samples:[], events:[], usesEpoch:false, eventsUseEpoch:false, start:null, end:null, minTemp:0, maxTemp:0, followLatest:true, hover:null};
-const controlLogState = {logs:[], usesEpoch:false};
+const controlLogState = {logs:[], usesEpoch:false, capacity:0, persistent:false};
 const tempHistoryPinch = {active:false, startDistance:0, startSpan:0, anchor:0, ratio:0.5};
 const tempHistoryDrag = {active:false, pointerId:null, startClientX:0, startSvgX:0, startStart:0, startEnd:0, moved:false};
 let curveRenderRange = null;
@@ -2588,14 +2590,16 @@ function renderControlLog(logs=null){
   if (Array.isArray(logs)) controlLogState.logs = logs;
   const allLogs = controlLogState.logs || [];
   const filtered = filteredControlLogs(allLogs);
+  const capacity = Number(controlLogState.capacity || 0);
+  const capText = capacity > 0 ? ` / 上限 ${capacity}` : '';
   if (!allLogs.length) {
     box.innerHTML = '<div class="empty">暂无控制事件</div>';
-    if ($('controlLogBadge')) $('controlLogBadge').textContent = '0 条';
+    if ($('controlLogBadge')) $('controlLogBadge').textContent = `0 条${capText}`;
     return;
   }
   if (!filtered.length) {
     box.innerHTML = '<div class="empty">当前筛选下暂无事件</div>';
-    if ($('controlLogBadge')) $('controlLogBadge').textContent = `0 / ${allLogs.length} 条`;
+    if ($('controlLogBadge')) $('controlLogBadge').textContent = `0 / ${allLogs.length} 条${capText}`;
     return;
   }
   box.innerHTML = filtered.slice().reverse().map(item => {
@@ -2610,7 +2614,7 @@ function renderControlLog(logs=null){
     const stage = stageText(item.stage || item.source);
     return `<div class="log-item"><strong>${formatLogMinute(item.minute)}</strong><div>${esc(head)}<br><span class="label">${esc(stage)} · ${esc(temps || '--')}</span><br>${esc(item.note || '')}</div></div>`;
   }).join('');
-  if ($('controlLogBadge')) $('controlLogBadge').textContent = `${filtered.length} / ${allLogs.length} 条`;
+  if ($('controlLogBadge')) $('controlLogBadge').textContent = `${filtered.length} / ${allLogs.length} 条${capText}`;
 }
 async function refreshControlLog(){
   if (controlLogRefreshInFlight || !$('controlLog')) return;
@@ -2620,6 +2624,8 @@ async function refreshControlLog(){
     if (!r.ok) throw new Error(await r.text());
     const data = await r.json();
     controlLogState.usesEpoch = !!data.usesEpoch;
+    controlLogState.capacity = Number(data.capacity || 0);
+    controlLogState.persistent = !!data.persistent;
     tempHistoryState.events = data.logs || [];
     tempHistoryState.eventsUseEpoch = !!data.usesEpoch;
     renderControlLog(data.logs || []);
@@ -5001,6 +5007,21 @@ void clearDecisionLog() {
   decisionLogCount = 0;
 }
 
+void appendDecisionLogMemory(const DecisionLogEntry &entry) {
+  decisionLog[decisionLogHead] = entry;
+  decisionLogHead = (decisionLogHead + 1) % kDecisionLogPoints;
+  if (decisionLogCount < kDecisionLogPoints) decisionLogCount++;
+}
+
+void writeCsvText(File &file, const char *text) {
+  if (text == nullptr) return;
+  for (const char *p = text; *p != '\0'; p++) {
+    char c = *p;
+    if (c == '\r' || c == '\n') c = ' ';
+    file.write(static_cast<uint8_t>(c));
+  }
+}
+
 bool saveControlEvents() {
   File file = LittleFS.open(kControlEventsPath, "w");
   if (!file) return false;
@@ -5025,6 +5046,58 @@ bool saveControlEvents() {
   bool ok = file.getWriteError() == 0;
   file.close();
   return ok;
+}
+
+void writeDecisionLogEntry(File &file, const DecisionLogEntry &entry) {
+  file.printf("%lu,%d,%d,%d,%s,%s,",
+              static_cast<unsigned long>(entry.minute),
+              static_cast<int>(entry.room10),
+              static_cast<int>(entry.target10),
+              static_cast<int>(entry.setpoint10),
+              entry.action,
+              entry.stage);
+  writeCsvText(file, entry.note);
+  file.print('\n');
+}
+
+bool saveDecisionLog() {
+  File file = LittleFS.open(kDecisionLogPath, "w");
+  if (!file) return false;
+  file.printf("DL1,%u,%u\n", decisionLogUsesEpoch ? 1 : 0, kDecisionLogPoints);
+  for (uint16_t i = 0; i < decisionLogCount; i++) {
+    uint16_t idx = (decisionLogHead + kDecisionLogPoints - decisionLogCount + i) % kDecisionLogPoints;
+    writeDecisionLogEntry(file, decisionLog[idx]);
+  }
+  bool ok = file.getWriteError() == 0;
+  file.close();
+  return ok;
+}
+
+bool appendDecisionLogToFile(const DecisionLogEntry &entry) {
+  bool needsHeader = !LittleFS.exists(kDecisionLogPath);
+  if (!needsHeader) {
+    File existing = LittleFS.open(kDecisionLogPath, "r");
+    if (!existing || existing.size() == 0) {
+      needsHeader = true;
+    } else if (existing.size() > kDecisionLogMaxFileBytes) {
+      existing.close();
+      return saveDecisionLog();
+    }
+    if (existing) existing.close();
+  }
+
+  File file = LittleFS.open(kDecisionLogPath, needsHeader ? "w" : "a");
+  if (!file) return false;
+  if (needsHeader) file.printf("DL1,%u,%u\n", decisionLogUsesEpoch ? 1 : 0, kDecisionLogPoints);
+  writeDecisionLogEntry(file, entry);
+  bool ok = file.getWriteError() == 0;
+  file.close();
+  if (!ok) return false;
+
+  File check = LittleFS.open(kDecisionLogPath, "r");
+  bool shouldCompact = check && check.size() > kDecisionLogMaxFileBytes;
+  if (check) check.close();
+  return shouldCompact ? saveDecisionLog() : true;
 }
 
 void loadControlEvents() {
@@ -5090,12 +5163,63 @@ void loadControlEvents() {
   file.close();
 }
 
+void loadDecisionLog() {
+  clearDecisionLog();
+  if (!LittleFS.exists(kDecisionLogPath)) return;
+  File file = LittleFS.open(kDecisionLogPath, "r");
+  if (!file) return;
+  String header = file.readStringUntil('\n');
+  header.trim();
+  unsigned int usesEpoch = 0;
+  unsigned int capacity = 0;
+  if (sscanf(header.c_str(), "DL1,%u,%u", &usesEpoch, &capacity) != 2) {
+    file.close();
+    return;
+  }
+  decisionLogUsesEpoch = usesEpoch != 0;
+  while (file.available()) {
+    String line = file.readStringUntil('\n');
+    line.trim();
+    if (!line.length()) continue;
+    unsigned long minute = 0;
+    int room10 = INT16_MIN;
+    int target10 = INT16_MIN;
+    int setpoint10 = INT16_MIN;
+    char action[24] = "";
+    char stage[12] = "";
+    char note[160] = "";
+    int matched = sscanf(line.c_str(), "%lu,%d,%d,%d,%23[^,],%11[^,],%159[^\n]",
+                         &minute,
+                         &room10,
+                         &target10,
+                         &setpoint10,
+                         action,
+                         stage,
+                         note);
+    if (matched >= 6) {
+      DecisionLogEntry entry;
+      entry.minute = static_cast<uint32_t>(minute);
+      entry.room10 = static_cast<int16_t>(room10);
+      entry.target10 = static_cast<int16_t>(target10);
+      entry.setpoint10 = static_cast<int16_t>(setpoint10);
+      copyText(entry.action, sizeof(entry.action), action);
+      copyText(entry.stage, sizeof(entry.stage), stage);
+      copyText(entry.note, sizeof(entry.note), matched >= 7 ? note : "");
+      appendDecisionLogMemory(entry);
+    }
+  }
+  bool needsCompact = file.size() > kDecisionLogMaxFileBytes;
+  file.close();
+  if (needsCompact) saveDecisionLog();
+}
+
 void addDecisionLog(const char *action, const char *stage, const char *note,
                     float room, float target, float setpoint) {
   bool usesEpoch = false;
   uint32_t minute = currentHistoryMinute(&usesEpoch);
-  if (decisionLogCount > 0 && usesEpoch != decisionLogUsesEpoch) {
+  if ((decisionLogCount > 0 || LittleFS.exists(kDecisionLogPath)) && usesEpoch != decisionLogUsesEpoch) {
     clearDecisionLog();
+    LittleFS.remove(kDecisionLogPath);
   }
   decisionLogUsesEpoch = usesEpoch;
   if (decisionLogCount > 0 && action != nullptr && strncmp(action, "skip_", 5) == 0) {
@@ -5107,7 +5231,7 @@ void addDecisionLog(const char *action, const char *stage, const char *note,
       return;
     }
   }
-  DecisionLogEntry &entry = decisionLog[decisionLogHead];
+  DecisionLogEntry entry;
   entry.minute = minute;
   entry.room10 = tempToTenths(room);
   entry.target10 = tempToTenths(target);
@@ -5115,8 +5239,8 @@ void addDecisionLog(const char *action, const char *stage, const char *note,
   copyText(entry.action, sizeof(entry.action), action);
   copyText(entry.stage, sizeof(entry.stage), stage);
   copyText(entry.note, sizeof(entry.note), note);
-  decisionLogHead = (decisionLogHead + 1) % kDecisionLogPoints;
-  if (decisionLogCount < kDecisionLogPoints) decisionLogCount++;
+  appendDecisionLogMemory(entry);
+  appendDecisionLogToFile(entry);
 }
 
 void addControlEvent(const char *source, const char *action, const AcRequest &request,
@@ -5866,11 +5990,43 @@ void sendJsonTenths(const char *name, int16_t value, bool leadingComma = true) {
   server.sendContent(String(value / 10.0f, 1));
 }
 
+void appendJsonEscaped(String &out, const char *text) {
+  out += "\"";
+  if (text != nullptr) {
+    for (const char *p = text; *p != '\0'; p++) {
+      char c = *p;
+      if (c == '"' || c == '\\') {
+        out += '\\';
+        out += c;
+      } else if (c == '\n') {
+        out += "\\n";
+      } else if (c == '\r') {
+        out += "\\r";
+      } else if (static_cast<uint8_t>(c) < 0x20) {
+        out += ' ';
+      } else {
+        out += c;
+      }
+    }
+  }
+  out += "\"";
+}
+
+void appendJsonTenths(String &out, const char *name, int16_t value) {
+  out += ",\"";
+  out += name;
+  out += "\":";
+  if (value == INT16_MIN) out += "null";
+  else out += String(value / 10.0f, 1);
+}
+
 void handleControlEvents() {
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "application/json", "");
   server.sendContent("{\"usesEpoch\":");
   server.sendContent(controlEventsUseEpoch ? "true" : "false");
+  server.sendContent(",\"persistent\":true,\"capacity\":");
+  server.sendContent(String(kControlEventPoints));
   server.sendContent(",\"count\":");
   server.sendContent(String(controlEventCount));
   server.sendContent(",\"events\":[");
@@ -5906,34 +6062,34 @@ void handleControlEvents() {
 }
 
 void handleControlLog() {
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.send(200, "application/json", "");
-  server.sendContent("{\"usesEpoch\":");
-  server.sendContent(decisionLogUsesEpoch ? "true" : "false");
-  server.sendContent(",\"count\":");
-  server.sendContent(String(decisionLogCount));
-  server.sendContent(",\"logs\":[");
+  String out;
+  out.reserve(160 + static_cast<uint32_t>(decisionLogCount) * 240U);
+  out += "{\"usesEpoch\":";
+  out += decisionLogUsesEpoch ? "true" : "false";
+  out += ",\"persistent\":true,\"capacity\":";
+  out += String(kDecisionLogPoints);
+  out += ",\"count\":";
+  out += String(decisionLogCount);
+  out += ",\"logs\":[";
   for (uint16_t i = 0; i < decisionLogCount; i++) {
     uint16_t idx = (decisionLogHead + kDecisionLogPoints - decisionLogCount + i) % kDecisionLogPoints;
     const DecisionLogEntry &entry = decisionLog[idx];
-    if (i > 0) server.sendContent(",");
-    JsonDocument doc;
-    doc["minute"] = entry.minute;
-    doc["action"] = entry.action;
-    doc["stage"] = entry.stage;
-    doc["note"] = entry.note;
-    if (entry.room10 == INT16_MIN) doc["room"] = nullptr;
-    else doc["room"] = entry.room10 / 10.0f;
-    if (entry.target10 == INT16_MIN) doc["target"] = nullptr;
-    else doc["target"] = entry.target10 / 10.0f;
-    if (entry.setpoint10 == INT16_MIN) doc["setpoint"] = nullptr;
-    else doc["setpoint"] = entry.setpoint10 / 10.0f;
-    String out;
-    serializeJson(doc, out);
-    server.sendContent(out);
+    if (i > 0) out += ",";
+    out += "{\"minute\":";
+    out += String(entry.minute);
+    out += ",\"action\":";
+    appendJsonEscaped(out, entry.action);
+    out += ",\"stage\":";
+    appendJsonEscaped(out, entry.stage);
+    out += ",\"note\":";
+    appendJsonEscaped(out, entry.note);
+    appendJsonTenths(out, "room", entry.room10);
+    appendJsonTenths(out, "target", entry.target10);
+    appendJsonTenths(out, "setpoint", entry.setpoint10);
+    out += "}";
   }
-  server.sendContent("]}");
-  server.sendContent("");
+  out += "]}";
+  server.send(200, "application/json", out);
 }
 
 void handleStatus() {
@@ -6757,6 +6913,7 @@ void setup() {
   loadConfig();
   loadTempHistory();
   loadControlEvents();
+  loadDecisionLog();
   loadLearnedLibrary();
   loadPresetLibrary();
 
