@@ -383,7 +383,8 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     body[data-skin="bluehome"] main > section[data-section-key="sleep"],
     body[data-skin="bluehome"] main > section[data-section-key="control"],
     body[data-skin="bluehome"] main > section[data-section-key="log"],
-    body[data-skin="bluehome"] main > section[data-section-key="wifi"] {
+    body[data-skin="bluehome"] main > section[data-section-key="wifi"],
+    body[data-skin="bluehome"] main > section[data-section-key="manual"] {
       grid-column: 1 / -1;
     }
     body[data-skin="bluehome"] main > section[data-section-key="settings"] {
@@ -733,6 +734,8 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     .table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--inset); }
     body[data-skin="bluehome"] pre,
     body[data-skin="bluehome"] .table-wrap,
+    body[data-skin="bluehome"] .manual-card,
+    body[data-skin="bluehome"] .manual-note,
     body[data-skin="bluehome"] .preset-card,
     body[data-skin="bluehome"] .preset-schedule,
     body[data-skin="bluehome"] .curve-editor,
@@ -746,6 +749,41 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     }
     body[data-skin="bluehome"] th {
       background: rgba(47, 128, 237, 0.08);
+    }
+    .manual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .manual-card {
+      min-width: 0;
+      display: grid;
+      gap: 9px;
+      align-content: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: var(--inset);
+    }
+    .manual-card ol,
+    .manual-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.58;
+    }
+    .manual-card li + li { margin-top: 5px; }
+    .manual-note {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--muted);
+      line-height: 1.55;
+      background: var(--panel);
+      box-shadow: var(--inset);
     }
     table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 680px; }
     th, td { border-bottom: 1px solid var(--line); padding: 9px 10px; text-align: left; vertical-align: top; }
@@ -1178,6 +1216,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       <div class="header-links">
         <a class="badge" href="/remote">打开手机遥控器</a>
         <a class="badge" href="/match">打开对码检查</a>
+        <a class="badge" href="#manual">使用说明</a>
         <div class="skin-switch" aria-label="皮肤选择">
           <button type="button" data-skin-choice="cream" onclick="setSkin('cream')">奶油</button>
           <button type="button" data-skin-choice="bluehome" onclick="setSkin('bluehome')">蓝家居</button>
@@ -1448,6 +1487,98 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     </div>
     <small>设备热点：IR-AC-S3，密码：12345678。当前主机名：ir-ac-s3。</small>
   </section>
+
+  <section id="manual" data-section-key="manual">
+    <div class="section-head">
+      <div>
+        <h2>使用说明</h2>
+        <div class="subhead">给第一次使用和排查问题时看的快速说明，帮助理解各功能之间的关系。</div>
+      </div>
+    </div>
+    <div class="manual-grid">
+      <article class="manual-card">
+        <h3>首次使用</h3>
+        <ol>
+          <li>在维护与闭环设置里确认空调协议和型号，确认后通常不用再改。</li>
+          <li>在空调控制里先试一次立即发送，确认空调能响应。</li>
+          <li>如果需要远程控制，先在 WiFi 配网里连接家里的路由器。</li>
+          <li>如果遥控器协议不完整，再使用红外学习库补充原始按键。</li>
+        </ol>
+      </article>
+      <article class="manual-card">
+        <h3>当前状态</h3>
+        <ul>
+          <li>室温和湿度来自设备上的 SHT31 传感器。</li>
+          <li>最近动作显示最后一次发送、跳过或失败的控制结果。</li>
+          <li>网络卡片显示设备当前局域网地址，用来访问网页。</li>
+        </ul>
+      </article>
+      <article class="manual-card">
+        <h3>72小时曲线</h3>
+        <ul>
+          <li>红色是室温，蓝色是湿度，每分钟记录一个点。</li>
+          <li>鼠标悬停可看当时时间、温度和湿度。</li>
+          <li>滚轮缩放横轴，拖动左右平移；手机上可双指缩放。</li>
+          <li>曲线上的事件点对应控制事件日志里的发送、跳过和结束事件。</li>
+        </ul>
+      </article>
+      <article class="manual-card">
+        <h3>睡眠温度曲线</h3>
+        <ul>
+          <li>开启后只在设定的开始时间和结束时间之间运行。</li>
+          <li>目标温度由曲线按时间计算，系统再决定空调模式、设定温度和风速。</li>
+          <li>急速阶段优先快速接近目标；安静时间到达后必须进入静音风速。</li>
+          <li>结束模式选择关机时，同一个睡眠周期只会执行一次关机。</li>
+        </ul>
+      </article>
+      <article class="manual-card">
+        <h3>空调控制</h3>
+        <ul>
+          <li>这里用于手动发送当前电源、模式、温度、风量和特殊功能。</li>
+          <li>发送成功后会记忆为模拟遥控器状态，下次打开页面会继承。</li>
+          <li>快捷指令会保存当前组合，可手动点击，也可设置定时发送。</li>
+          <li>特殊功能里的强劲、静音、睡眠是互斥模式，一次只选择一种。</li>
+        </ul>
+      </article>
+      <article class="manual-card">
+        <h3>湿度控制</h3>
+        <ul>
+          <li>独立湿度控制不受睡眠开始时间限制，打开后会持续判断湿度。</li>
+          <li>湿度高于目标加死区时，优先使用除湿模式；室温偏低时会先控温。</li>
+          <li>睡眠曲线运行期间，曲线除湿开关决定曲线内是否参与除湿。</li>
+          <li>关闭独立湿度控制时，系统会自动发送一次关机指令。</li>
+        </ul>
+      </article>
+      <article class="manual-card">
+        <h3>事件日志</h3>
+        <ul>
+          <li>日志记录手动、自动曲线、湿度控制、快捷指令和系统结束事件。</li>
+          <li>发送表示已经发出红外；跳过通常表示死区、过滤阈值或趋势预测生效。</li>
+          <li>排查为什么没有发射信号时，优先看这里的来源和类型筛选。</li>
+        </ul>
+      </article>
+      <article class="manual-card">
+        <h3>维护设置</h3>
+        <ul>
+          <li>协议和型号是低频配置，只有更换空调库匹配结果时才需要修改。</li>
+          <li>传感器校准用于修正设备摆放位置造成的温湿度偏差。</li>
+          <li>空调库能力用于关闭当前协议不支持的强劲、静音、摆风等功能。</li>
+          <li>导出配置可备份设置；导入配置和 OTA 升级用于维护设备。</li>
+        </ul>
+      </article>
+      <article class="manual-card">
+        <h3>红外学习与配网</h3>
+        <ul>
+          <li>红外学习库保存实体遥控器的原始红外数据，可作为协议库不完整时的补充。</li>
+          <li>对码检查用于比较实体遥控器和当前协议库的按键组合是否一致。</li>
+          <li>WiFi 配网支持扫描热点，保存后设备优先连接路由器，失败时保留热点模式。</li>
+        </ul>
+      </article>
+    </div>
+    <div class="manual-note">
+      自动曲线、独立湿度、快捷定时和手动控制共用同一个红外发射器和模拟遥控器状态。某些情况下没有再次发射信号，并不一定是故障，可能是温度死区、发送过滤、趋势预测或同一睡眠周期结束关机保护正在生效。
+    </div>
+  </section>
 </main>
 <script>
 let state = {};
@@ -1625,7 +1756,7 @@ function ensureTempHistorySection(){
 function orderMainSections(){
   const main = document.querySelector('main');
   if (!main) return;
-  const desiredKeys = ['status','history','sleep','control','log','settings','learn','wifi'];
+  const desiredKeys = ['status','history','sleep','control','log','settings','learn','wifi','manual'];
   const titleKeys = {
     '当前状态':'status',
     '72小时温湿度曲线':'history',
@@ -1634,7 +1765,8 @@ function orderMainSections(){
     '控制事件日志':'log',
     '维护与闭环设置':'settings',
     '红外学习库':'learn',
-    'WiFi 配网':'wifi'
+    'WiFi 配网':'wifi',
+    '使用说明':'manual'
   };
   const sectionTitle = section => {
     const h2 = section.querySelector(':scope > .section-head h2');
