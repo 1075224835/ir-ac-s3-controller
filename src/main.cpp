@@ -119,11 +119,36 @@ struct PresetCommand {
   uint32_t lastScheduleKey = 0;
 };
 
+struct AcProfile {
+  uint8_t id = 0;
+  String name;
+  decode_type_t protocol = decode_type_t::UNKNOWN;
+  int16_t model = 1;
+  bool power = true;
+  float degrees = 26.0f;
+  String mode = "cool";
+  String fan = "auto";
+  bool turbo = false;
+  bool quiet = false;
+  bool sleep = false;
+  bool swingV = false;
+  bool swingH = false;
+  bool filter = false;
+  bool capTurbo = true;
+  bool capQuiet = true;
+  bool capSleep = true;
+  bool capSwingV = true;
+  bool capSwingH = true;
+  bool capFilter = true;
+};
+
 struct CaptureSnapshot {
   bool available = false;
   decode_type_t protocol = decode_type_t::UNKNOWN;
   uint16_t bits = 0;
   uint64_t value = 0;
+  uint16_t stateLen = 0;
+  uint8_t state[kStateSizeMax] = {};
   uint16_t rawLen = 0;
   uint16_t raw[kMaxRawPulses] = {};
   String summary;
@@ -207,6 +232,10 @@ constexpr uint8_t kMaxPresetCommands = 50;
 constexpr char kPresetPath[] = "/presets.json";
 PresetCommand presets[kMaxPresetCommands];
 uint8_t presetCount = 0;
+constexpr uint8_t kMaxAcProfiles = 6;
+AcProfile acProfiles[kMaxAcProfiles];
+uint8_t acProfileCount = 0;
+uint8_t activeAcProfileId = 1;
 CaptureSnapshot lastCapture;
 
 Adafruit_SHT31 sht31;
@@ -1302,8 +1331,10 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     <div class="actions">
       <button onclick="sendAc()">立即发送</button>
       <button class="secondary" type="button" onclick="selfTestAc()">自发自收校验</button>
+      <button class="secondary" type="button" onclick="compareAcCode()">对比实体遥控编码</button>
     </div>
     <div class="label" id="selfTestResult">校验会实际发射一次当前红外指令。</div>
+    <div class="label" id="codeCompareResult">编码对比前，请先用实体遥控器发送同一组合，让控制器捕获基准编码。</div>
     <div class="preset-panel">
       <div class="preset-head">
         <div>
@@ -1423,6 +1454,16 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       <div class="badge" id="settingsBadge">待保存</div>
     </div>
     <div class="settings-panel">
+      <h3>空调方案</h3>
+      <div class="form-grid">
+        <label>当前方案<select id="acProfileSelect" onchange="selectAcProfile()"></select></label>
+        <label>方案名称<input id="acProfileName" autocomplete="off" placeholder="卧室 MIRAGE / 客厅 GREE"></label>
+      </div>
+      <div class="mini-actions">
+        <button type="button" onclick="saveCurrentAcProfile()">保存到当前方案</button>
+        <button class="secondary" type="button" onclick="createAcProfile()">新建方案</button>
+        <button class="secondary danger" type="button" onclick="deleteCurrentAcProfile()">删除方案</button>
+      </div>
       <h3>遥控协议</h3>
       <div class="form-grid">
         <label>协议<select id="protocol"></select></label>
@@ -1612,7 +1653,7 @@ let refreshInFlight = false;
 let liveRefreshInFlight = false;
 const $ = id => document.getElementById(id);
 const dirty = new Set();
-const guardedIds = ['staSsid','staPassword','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan','autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve','sensorTempOffset','sensorHumidityOffset','humidityControlEnabled','targetHumidity','humidityDeadband','humidityTargetTemp','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'];
+const guardedIds = ['staSsid','staPassword','acProfileName','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan','autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve','sensorTempOffset','sensorHumidityOffset','humidityControlEnabled','targetHumidity','humidityDeadband','humidityTargetTemp','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'];
 const curveView = {w:720, h:280, l:44, r:14, t:10, b:30};
 const historyView = {w:720, h:260, l:50, r:52, t:18, b:38};
 let tempHistoryRefreshInFlight = false;
@@ -2699,6 +2740,7 @@ function captureText(capture){
     '协议：' + (capture.protocol || '未知'),
     '位数：' + (capture.bits ?? '--'),
     '码值：' + (capture.value || '--'),
+    '状态字节：' + (capture.stateHex || '--'),
     'Raw 长度：' + (capture.rawLen ?? '--'),
     '空调解析：' + (capture.acDescription || '未识别为空调协议'),
     '摘要：' + (capture.summary || '--')
@@ -3109,6 +3151,7 @@ async function refresh(force=false){
     setValue('capSwingH', String(state.config.capSwingH !== false), force);
     setValue('capFilter', String(state.config.capFilter !== false), force);
     if ($('settingsBadge')) $('settingsBadge').textContent = `急速学习 ${Number(state.config.learnedFastRate || 0).toFixed(3)} · 安静学习 ${Number(state.config.learnedQuietRate || 0).toFixed(3)}`;
+    renderAcProfiles(state.config, force);
     applyCapabilities();
     setValue('curve', JSON.stringify(state.config.curve), force);
     renderCurve();
@@ -3192,6 +3235,91 @@ async function saveAcConfig(){
     await post('/api/ac-config', {protocol:$('protocol').value, model:Number($('model').value)}, '空调协议/型号已保存', ['protocol','model']);
   } catch(e) { msg(e.message || '配置保存失败', true); }
 }
+function currentAcProfilePayload(){
+  return Object.assign(remoteCommandPayload(), {
+    id:Number($('acProfileSelect')?.value || (state.config && state.config.activeAcProfileId) || 1),
+    name:($('acProfileName')?.value || '').trim(),
+    protocol:$('protocol')?.value || 'UNKNOWN',
+    model:Number($('model')?.value || 1),
+    capTurbo:boolSelectValue('capTurbo'),
+    capQuiet:boolSelectValue('capQuiet'),
+    capSleep:boolSelectValue('capSleep'),
+    capSwingV:boolSelectValue('capSwingV'),
+    capSwingH:boolSelectValue('capSwingH'),
+    capFilter:boolSelectValue('capFilter')
+  });
+}
+function renderAcProfiles(cfg, force=false){
+  cfg = cfg || {};
+  const profiles = cfg.acProfiles || [];
+  const select = $('acProfileSelect');
+  if (!select) return;
+  const activeId = Number(cfg.activeAcProfileId || 0);
+  select.innerHTML = profiles.map(p => `<option value="${Number(p.id)}" ${Number(p.id) === activeId ? 'selected' : ''}>${esc(p.name || ((p.protocol || 'UNKNOWN') + ' / 型号 ' + (p.model || 1)))}</option>`).join('');
+  if (activeId) select.value = String(activeId);
+  const active = profiles.find(p => Number(p.id) === activeId) || profiles[0];
+  if (active) {
+    setValue('acProfileName', active.name || '', force);
+  }
+}
+async function applyProfilesResponse(data, okText){
+  if (!state.config) state.config = {};
+  state.config.activeAcProfileId = data.activeId;
+  state.config.acProfiles = data.profiles || [];
+  clearDirty(['acProfileName','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter']);
+  msg(okText || '空调方案已更新');
+  await refresh(true);
+}
+async function selectAcProfile(){
+  const id = Number($('acProfileSelect')?.value || 0);
+  if (!id) return;
+  try {
+    msg('正在切换空调方案...');
+    const data = await fetchJsonSafe('/api/ac-profile/select', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id})
+    }, '空调方案切换', 0, 15000);
+    await applyProfilesResponse(data, '空调方案已切换');
+  } catch(e) { msg(e.message || '空调方案切换失败', true); }
+}
+async function saveCurrentAcProfile(){
+  try {
+    const data = await fetchJsonSafe('/api/ac-profile/update', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(currentAcProfilePayload())
+    }, '空调方案保存', 0, 15000);
+    await applyProfilesResponse(data, '当前空调方案已保存');
+  } catch(e) { msg(e.message || '空调方案保存失败', true); }
+}
+async function createAcProfile(){
+  const base = currentAcProfilePayload();
+  const suggested = base.name || `${base.protocol} / 型号 ${base.model}`;
+  const name = prompt('新空调方案名称', suggested);
+  if (name === null) return;
+  try {
+    const data = await fetchJsonSafe('/api/ac-profile/create', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign(base, {name:name.trim() || suggested}))
+    }, '空调方案创建', 0, 15000);
+    await applyProfilesResponse(data, '新空调方案已创建');
+  } catch(e) { msg(e.message || '空调方案创建失败', true); }
+}
+async function deleteCurrentAcProfile(){
+  const id = Number($('acProfileSelect')?.value || 0);
+  const name = $('acProfileName')?.value || '当前方案';
+  if (!id || !confirm(`删除空调方案「${name}」？`)) return;
+  try {
+    const data = await fetchJsonSafe('/api/ac-profile/delete', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id})
+    }, '空调方案删除', 0, 15000);
+    await applyProfilesResponse(data, '空调方案已删除');
+  } catch(e) { msg(e.message || '空调方案删除失败', true); }
+}
 async function sendAc(){
   try {
     await post('/api/send-ac', remoteCommandPayload(), '红外命令已发送');
@@ -3228,6 +3356,45 @@ async function selfTestAc(){
   } catch(e) {
     if (box) box.textContent = e.message || '自发自收校验失败';
     msg(e.message || '自发自收校验失败', true);
+  }
+}
+function formatCaptureBrief(c){
+  if (!c || !c.available) return '无编码';
+  const core = c.stateHex || c.value || '--';
+  return `${c.protocol || '--'} / ${c.bits || 0} bits / ${core}`;
+}
+function formatCodeCompareResult(data){
+  if (!data) return '未获得编码对比结果';
+  const parts = [
+    data.message || '编码对比完成',
+    `严格 ${data.strictOk ? '一致' : '不一致'}`,
+    `语义 ${data.semanticOk ? '一致' : '不一致'}`,
+    `实体 ${formatCaptureBrief(data.reference)}`,
+    `生成 ${formatCaptureBrief(data.generated)}`
+  ];
+  const mismatches = []
+    .concat(data.strictMismatches || [])
+    .concat(data.semanticMismatches || []);
+  if (mismatches.length) parts.push(`差异：${[...new Set(mismatches)].join('，')}`);
+  return parts.join(' · ');
+}
+async function compareAcCode(){
+  const box = $('codeCompareResult');
+  try {
+    if (box) box.textContent = '正在生成当前设置编码并与最近实体遥控器捕获对比...';
+    msg('正在对比编码...');
+    const data = await fetchJsonSafe('/api/compare-ac-code', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign(remoteCommandPayload(), {timeoutMs:4500}))
+    }, '编码对比', 0, 14000);
+    const text = formatCodeCompareResult(data);
+    if (box) box.textContent = text;
+    msg(data.ok ? '严格编码一致' : (data.semanticOk ? '语义一致，原始编码有差异' : '编码不一致'), !(data.ok || data.semanticOk));
+    await refresh(true);
+  } catch(e) {
+    if (box) box.textContent = e.message || '编码对比失败';
+    msg(e.message || '编码对比失败', true);
   }
 }
 async function createPresetFromCurrent(){
@@ -4637,6 +4804,18 @@ String uint64ToHexString(uint64_t value) {
   return String(buffer);
 }
 
+String bytesToHexString(const uint8_t *data, uint16_t len) {
+  static const char hex[] = "0123456789ABCDEF";
+  String out;
+  out.reserve(2 + len * 2);
+  out += "0x";
+  for (uint16_t i = 0; i < len; i++) {
+    out += hex[(data[i] >> 4) & 0x0F];
+    out += hex[data[i] & 0x0F];
+  }
+  return out;
+}
+
 float clampFloat(float value, float lower, float upper) {
   if (value < lower) return lower;
   if (value > upper) return upper;
@@ -4871,10 +5050,170 @@ void maintainTempHistoryPersistence() {
   if (enoughSamples || enoughTime) saveTempHistory();
 }
 
+int findAcProfileIndexById(uint8_t id) {
+  for (uint8_t i = 0; i < acProfileCount; i++) {
+    if (acProfiles[i].id == id) return i;
+  }
+  return -1;
+}
+
+uint8_t nextAcProfileId() {
+  uint8_t next = 1;
+  for (uint8_t i = 0; i < acProfileCount; i++) {
+    if (acProfiles[i].id >= next) next = acProfiles[i].id + 1;
+  }
+  if (next == 0) next = 1;
+  return next;
+}
+
+String defaultAcProfileName(const AcProfile &profile) {
+  String protocol = typeToString(profile.protocol);
+  if (protocol == "UNKNOWN") protocol = "未配置";
+  return protocol + " / 型号 " + String(profile.model);
+}
+
+void snapshotConfigToProfile(AcProfile &profile) {
+  profile.protocol = config.acProtocol;
+  profile.model = config.acModel;
+  profile.power = config.remotePower;
+  profile.mode = config.remoteMode;
+  profile.fan = config.remoteFan;
+  profile.degrees = clampFloat(config.remoteDegrees, 16.0f, 32.0f);
+  profile.turbo = config.remoteTurbo;
+  profile.quiet = config.remoteQuiet;
+  profile.sleep = config.remoteSleep;
+  profile.swingV = config.remoteSwingV;
+  profile.swingH = config.remoteSwingH;
+  profile.filter = config.remoteFilter;
+  profile.capTurbo = config.capTurbo;
+  profile.capQuiet = config.capQuiet;
+  profile.capSleep = config.capSleep;
+  profile.capSwingV = config.capSwingV;
+  profile.capSwingH = config.capSwingH;
+  profile.capFilter = config.capFilter;
+  if (!profile.name.length()) profile.name = defaultAcProfileName(profile);
+}
+
+void applyProfileToConfig(const AcProfile &profile) {
+  config.acProtocol = profile.protocol;
+  config.acModel = profile.model < 1 ? 1 : profile.model;
+  config.remotePower = profile.power;
+  config.remoteMode = profile.mode.length() ? profile.mode : "cool";
+  config.remoteFan = profile.fan.length() ? profile.fan : "auto";
+  config.remoteDegrees = clampFloat(profile.degrees, 16.0f, 32.0f);
+  config.remoteTurbo = profile.turbo;
+  config.remoteQuiet = profile.quiet;
+  config.remoteSleep = profile.sleep;
+  config.remoteSwingV = profile.swingV;
+  config.remoteSwingH = profile.swingH;
+  config.remoteFilter = profile.filter;
+  config.capTurbo = profile.capTurbo;
+  config.capQuiet = profile.capQuiet;
+  config.capSleep = profile.capSleep;
+  config.capSwingV = profile.capSwingV;
+  config.capSwingH = profile.capSwingH;
+  config.capFilter = profile.capFilter;
+  normalizeConfigRemoteState();
+  lastAutoSentSetpoint = NAN;
+  lastAutoSentMode = "";
+  lastAutoSentFan = "";
+}
+
+void ensureAcProfiles() {
+  if (acProfileCount == 0) {
+    acProfileCount = 1;
+    acProfiles[0].id = activeAcProfileId == 0 ? 1 : activeAcProfileId;
+    snapshotConfigToProfile(acProfiles[0]);
+  }
+  if (findAcProfileIndexById(activeAcProfileId) < 0) activeAcProfileId = acProfiles[0].id;
+}
+
+void syncConfigToActiveProfile() {
+  ensureAcProfiles();
+  int idx = findAcProfileIndexById(activeAcProfileId);
+  if (idx >= 0) snapshotConfigToProfile(acProfiles[idx]);
+}
+
+void addAcProfileToJson(JsonObject obj, const AcProfile &profile) {
+  obj["id"] = profile.id;
+  obj["name"] = profile.name.length() ? profile.name : defaultAcProfileName(profile);
+  obj["protocol"] = typeToString(profile.protocol);
+  obj["model"] = profile.model;
+  obj["power"] = profile.power;
+  obj["degrees"] = profile.degrees;
+  obj["mode"] = profile.mode;
+  obj["fan"] = profile.fan;
+  obj["turbo"] = profile.turbo;
+  obj["quiet"] = profile.quiet;
+  obj["sleep"] = profile.sleep;
+  obj["swingV"] = profile.swingV;
+  obj["swingH"] = profile.swingH;
+  obj["filter"] = profile.filter;
+  obj["capTurbo"] = profile.capTurbo;
+  obj["capQuiet"] = profile.capQuiet;
+  obj["capSleep"] = profile.capSleep;
+  obj["capSwingV"] = profile.capSwingV;
+  obj["capSwingH"] = profile.capSwingH;
+  obj["capFilter"] = profile.capFilter;
+}
+
+void loadAcProfileFromJson(AcProfile &profile, JsonObject item) {
+  profile.id = item["id"] | 0;
+  profile.name = item["name"] | "";
+  profile.name.trim();
+  profile.protocol = strToDecodeType((item["protocol"] | "UNKNOWN"));
+  profile.model = item["model"] | 1;
+  profile.power = item["power"] | true;
+  profile.degrees = clampFloat(item["degrees"] | 26.0f, 16.0f, 32.0f);
+  profile.mode = item["mode"] | "cool";
+  profile.fan = item["fan"] | "auto";
+  profile.turbo = item["turbo"] | false;
+  profile.quiet = item["quiet"] | false;
+  profile.sleep = item["sleep"] | false;
+  profile.swingV = item["swingV"] | false;
+  profile.swingH = item["swingH"] | false;
+  profile.filter = item["filter"] | false;
+  profile.capTurbo = item["capTurbo"] | true;
+  profile.capQuiet = item["capQuiet"] | true;
+  profile.capSleep = item["capSleep"] | true;
+  profile.capSwingV = item["capSwingV"] | true;
+  profile.capSwingH = item["capSwingH"] | true;
+  profile.capFilter = item["capFilter"] | true;
+  if (!profile.name.length()) profile.name = defaultAcProfileName(profile);
+}
+
+void updateAcProfileFromJson(AcProfile &profile, JsonObject item) {
+  if (item["name"].is<const char *>()) {
+    profile.name = item["name"].as<String>();
+    profile.name.trim();
+  }
+  if (item["protocol"].is<const char *>()) profile.protocol = strToDecodeType((item["protocol"] | "UNKNOWN"));
+  if (item["model"].is<int>()) profile.model = item["model"] | profile.model;
+  if (item["power"].is<bool>()) profile.power = item["power"] | profile.power;
+  if (item["degrees"].is<float>() || item["degrees"].is<int>()) profile.degrees = clampFloat(item["degrees"] | profile.degrees, 16.0f, 32.0f);
+  if (item["mode"].is<const char *>()) profile.mode = item["mode"] | profile.mode;
+  if (item["fan"].is<const char *>()) profile.fan = item["fan"] | profile.fan;
+  if (item["turbo"].is<bool>()) profile.turbo = item["turbo"] | profile.turbo;
+  if (item["quiet"].is<bool>()) profile.quiet = item["quiet"] | profile.quiet;
+  if (item["sleep"].is<bool>()) profile.sleep = item["sleep"] | profile.sleep;
+  if (item["swingV"].is<bool>()) profile.swingV = item["swingV"] | profile.swingV;
+  if (item["swingH"].is<bool>()) profile.swingH = item["swingH"] | profile.swingH;
+  if (item["filter"].is<bool>()) profile.filter = item["filter"] | profile.filter;
+  if (item["capTurbo"].is<bool>()) profile.capTurbo = item["capTurbo"] | profile.capTurbo;
+  if (item["capQuiet"].is<bool>()) profile.capQuiet = item["capQuiet"] | profile.capQuiet;
+  if (item["capSleep"].is<bool>()) profile.capSleep = item["capSleep"] | profile.capSleep;
+  if (item["capSwingV"].is<bool>()) profile.capSwingV = item["capSwingV"] | profile.capSwingV;
+  if (item["capSwingH"].is<bool>()) profile.capSwingH = item["capSwingH"] | profile.capSwingH;
+  if (item["capFilter"].is<bool>()) profile.capFilter = item["capFilter"] | profile.capFilter;
+  if (!profile.name.length()) profile.name = defaultAcProfileName(profile);
+}
+
 void saveConfig() {
   normalizeTuningConfig();
   normalizeConfigRemoteState();
+  syncConfigToActiveProfile();
   JsonDocument doc;
+  doc["activeAcProfileId"] = activeAcProfileId;
   doc["staSsid"] = config.staSsid;
   doc["staPassword"] = config.staPassword;
   doc["acProtocol"] = typeToString(config.acProtocol);
@@ -4927,12 +5266,21 @@ void saveConfig() {
     point["minute"] = config.curve[i].minute;
     point["temp"] = config.curve[i].temp;
   }
+  JsonArray profiles = doc["acProfiles"].to<JsonArray>();
+  for (uint8_t i = 0; i < acProfileCount; i++) {
+    JsonObject item = profiles.add<JsonObject>();
+    addAcProfileToJson(item, acProfiles[i]);
+  }
   writeJsonFile(kConfigPath, doc);
 }
 
 void loadConfig() {
   JsonDocument doc;
-  if (!readJsonFile(kConfigPath, doc)) return;
+  if (!readJsonFile(kConfigPath, doc)) {
+    ensureAcProfiles();
+    return;
+  }
+  activeAcProfileId = doc["activeAcProfileId"] | activeAcProfileId;
   config.staSsid = doc["staSsid"] | config.staSsid;
   config.staPassword = doc["staPassword"] | config.staPassword;
   if (config.staSsid == kDefaultWifiSsid && config.staPassword.length() == 0) {
@@ -4997,6 +5345,19 @@ void loadConfig() {
     }
     if (config.curveCount == 0) config.curveCount = 1;
   }
+  JsonArray profiles = doc["acProfiles"].as<JsonArray>();
+  if (!profiles.isNull()) {
+    acProfileCount = 0;
+    for (JsonObject item : profiles) {
+      if (acProfileCount >= kMaxAcProfiles) break;
+      loadAcProfileFromJson(acProfiles[acProfileCount], item);
+      if (acProfiles[acProfileCount].id == 0) acProfiles[acProfileCount].id = nextAcProfileId();
+      acProfileCount++;
+    }
+  }
+  ensureAcProfiles();
+  int activeIdx = findAcProfileIndexById(activeAcProfileId);
+  if (activeIdx >= 0) applyProfileToConfig(acProfiles[activeIdx]);
 }
 
 void saveLearnedLibrary() {
@@ -5819,6 +6180,14 @@ void storeCaptureSnapshot(const decode_results &results) {
   lastCapture.protocol = results.decode_type;
   lastCapture.bits = results.bits;
   lastCapture.value = results.value;
+  lastCapture.stateLen = 0;
+  memset(lastCapture.state, 0, sizeof(lastCapture.state));
+  if (results.decode_type == decode_type_t::GREE || results.decode_type == decode_type_t::MIRAGE || results.bits > 64) {
+    uint16_t stateLen = (results.bits + 7) / 8;
+    if (stateLen > kStateSizeMax) stateLen = kStateSizeMax;
+    lastCapture.stateLen = stateLen;
+    memcpy(lastCapture.state, results.state, stateLen);
+  }
   lastCapture.summary = resultToHumanReadableBasic(&results);
   lastCapture.acDescription = IRAcUtils::resultAcToString(&results);
   lastCapture.capturedAtMs = millis();
@@ -6086,6 +6455,133 @@ String selfTestReportJson(const SelfTestReport &report) {
   }
   out += "]}";
   return out;
+}
+
+bool snapshotToCommonState(const CaptureSnapshot &snapshot, stdAc::state_t *state, const stdAc::state_t *prev = nullptr) {
+  if (!snapshot.available || state == nullptr) return false;
+  decode_results decoded;
+  memset(&decoded, 0, sizeof(decoded));
+  decoded.decode_type = snapshot.protocol;
+  decoded.bits = snapshot.bits;
+  if (snapshot.stateLen > 0) {
+    memcpy(decoded.state, snapshot.state, min(snapshot.stateLen, static_cast<uint16_t>(kStateSizeMax)));
+  } else {
+    decoded.value = snapshot.value;
+  }
+  return IRAcUtils::decodeToState(&decoded, state, prev);
+}
+
+String captureSnapshotJson(const CaptureSnapshot &snapshot) {
+  String out;
+  out.reserve(420);
+  out += "{\"available\":";
+  out += snapshot.available ? "true" : "false";
+  out += ",\"protocol\":";
+  out += jsonString(typeToString(snapshot.protocol));
+  out += ",\"bits\":";
+  out += String(snapshot.bits);
+  out += ",\"value\":";
+  out += jsonString(uint64ToHexString(snapshot.value));
+  out += ",\"stateLen\":";
+  out += String(snapshot.stateLen);
+  out += ",\"stateHex\":";
+  out += jsonString(snapshot.stateLen > 0 ? bytesToHexString(snapshot.state, snapshot.stateLen) : "");
+  out += ",\"rawLen\":";
+  out += String(snapshot.rawLen);
+  out += ",\"acDescription\":";
+  out += jsonString(snapshot.acDescription);
+  out += "}";
+  return out;
+}
+
+void appendCodeCompareMismatch(String &mismatches, const String &text) {
+  if (mismatches.length()) mismatches += "|";
+  mismatches += text;
+}
+
+bool commonStatesSemanticallyEqual(const stdAc::state_t &reference, const stdAc::state_t &generated, String &mismatches) {
+  bool ok = true;
+  if (reference.power != generated.power) {
+    appendCodeCompareMismatch(mismatches, "电源不同");
+    ok = false;
+  }
+  if (!reference.power && !generated.power) return ok;
+  if (reference.mode != generated.mode) {
+    appendCodeCompareMismatch(mismatches, "模式不同");
+    ok = false;
+  }
+  if (fabs(reference.degrees - generated.degrees) > 0.25f) {
+    appendCodeCompareMismatch(mismatches, "温度不同");
+    ok = false;
+  }
+  if (reference.fanspeed != generated.fanspeed) {
+    appendCodeCompareMismatch(mismatches, "风速不同");
+    ok = false;
+  }
+  if (reference.turbo != generated.turbo) {
+    appendCodeCompareMismatch(mismatches, "强劲不同");
+    ok = false;
+  }
+  if (reference.quiet != generated.quiet) {
+    appendCodeCompareMismatch(mismatches, "静音不同");
+    ok = false;
+  }
+  if ((reference.sleep >= 0) != (generated.sleep >= 0)) {
+    appendCodeCompareMismatch(mismatches, "睡眠不同");
+    ok = false;
+  }
+  if (stateSwingVActive(reference.swingv) != stateSwingVActive(generated.swingv)) {
+    appendCodeCompareMismatch(mismatches, "上下摆风不同");
+    ok = false;
+  }
+  if (stateSwingHActive(reference.swingh) != stateSwingHActive(generated.swingh)) {
+    appendCodeCompareMismatch(mismatches, "左右摆风不同");
+    ok = false;
+  }
+  if (reference.filter != generated.filter) {
+    appendCodeCompareMismatch(mismatches, "滤网/出风口不同");
+    ok = false;
+  }
+  return ok;
+}
+
+String codeCompareMismatchesJson(const String &mismatches) {
+  String out = "[";
+  int start = 0;
+  bool first = true;
+  while (start < mismatches.length()) {
+    int end = mismatches.indexOf('|', start);
+    if (end < 0) end = mismatches.length();
+    if (!first) out += ",";
+    out += jsonString(mismatches.substring(start, end));
+    first = false;
+    start = end + 1;
+  }
+  out += "]";
+  return out;
+}
+
+bool strictCaptureEqual(const CaptureSnapshot &reference, const CaptureSnapshot &generated, String &mismatches) {
+  bool ok = true;
+  if (reference.protocol != generated.protocol) {
+    appendCodeCompareMismatch(mismatches, "协议不同");
+    ok = false;
+  }
+  if (reference.bits != generated.bits) {
+    appendCodeCompareMismatch(mismatches, "位数不同");
+    ok = false;
+  }
+  if (reference.stateLen > 0 || generated.stateLen > 0) {
+    if (reference.stateLen != generated.stateLen ||
+        memcmp(reference.state, generated.state, min(reference.stateLen, generated.stateLen)) != 0) {
+      appendCodeCompareMismatch(mismatches, "状态字节不同");
+      ok = false;
+    }
+  } else if (reference.value != generated.value) {
+    appendCodeCompareMismatch(mismatches, "码值不同");
+    ok = false;
+  }
+  return ok;
 }
 
 SelfTestReport runAcSelfTest(const AcRequest &request, uint32_t timeoutMs = 3500) {
@@ -6550,6 +7046,8 @@ void runAutoControl() {
 }
 
 void addConfigToJson(JsonObject obj) {
+  ensureAcProfiles();
+  obj["activeAcProfileId"] = activeAcProfileId;
   obj["staSsid"] = config.staSsid;
   obj["acProtocol"] = typeToString(config.acProtocol);
   obj["acModel"] = config.acModel;
@@ -6600,6 +7098,11 @@ void addConfigToJson(JsonObject obj) {
     JsonObject point = curve.add<JsonObject>();
     point["minute"] = config.curve[i].minute;
     point["temp"] = config.curve[i].temp;
+  }
+  JsonArray profiles = obj["acProfiles"].to<JsonArray>();
+  for (uint8_t i = 0; i < acProfileCount; i++) {
+    JsonObject item = profiles.add<JsonObject>();
+    addAcProfileToJson(item, acProfiles[i]);
   }
 }
 
@@ -6701,6 +7204,8 @@ void addLiveToJson(JsonDocument &doc) {
     cap["protocol"] = typeToString(lastCapture.protocol);
     cap["bits"] = lastCapture.bits;
     cap["value"] = uint64ToHexString(lastCapture.value);
+    cap["stateLen"] = lastCapture.stateLen;
+    if (lastCapture.stateLen > 0) cap["stateHex"] = bytesToHexString(lastCapture.state, lastCapture.stateLen);
     cap["rawLen"] = lastCapture.rawLen;
     cap["summary"] = lastCapture.summary;
     cap["acDescription"] = lastCapture.acDescription;
@@ -7282,6 +7787,192 @@ void handleSelfTestAcPost() {
   sendJsonResponse(200, selfTestReportJson(report));
 }
 
+String acProfilesJson() {
+  ensureAcProfiles();
+  String out;
+  out.reserve(1600);
+  out += "{\"activeId\":";
+  out += String(activeAcProfileId);
+  out += ",\"count\":";
+  out += String(acProfileCount);
+  out += ",\"max\":";
+  out += String(kMaxAcProfiles);
+  out += ",\"profiles\":[";
+  for (uint8_t i = 0; i < acProfileCount; i++) {
+    if (i > 0) out += ",";
+    JsonDocument doc;
+    JsonObject obj = doc.to<JsonObject>();
+    addAcProfileToJson(obj, acProfiles[i]);
+    String item;
+    serializeJson(doc, item);
+    out += item;
+  }
+  out += "]}";
+  return out;
+}
+
+void handleAcProfilesGet() {
+  sendJsonResponse(200, acProfilesJson());
+}
+
+void handleAcProfileCreatePost() {
+  if (acProfileCount >= kMaxAcProfiles) {
+    sendError(409, "空调方案数量已达上限");
+    return;
+  }
+  JsonDocument doc;
+  if (!parseBody(doc)) return;
+  AcProfile &profile = acProfiles[acProfileCount];
+  profile = AcProfile();
+  profile.id = nextAcProfileId();
+  snapshotConfigToProfile(profile);
+  updateAcProfileFromJson(profile, doc.as<JsonObject>());
+  activeAcProfileId = profile.id;
+  acProfileCount++;
+  applyProfileToConfig(profile);
+  saveConfig();
+  sendJsonResponse(200, acProfilesJson());
+}
+
+void handleAcProfileUpdatePost() {
+  JsonDocument doc;
+  if (!parseBody(doc)) return;
+  uint8_t id = doc["id"] | activeAcProfileId;
+  int idx = findAcProfileIndexById(id);
+  if (idx < 0) {
+    sendError(404, "空调方案不存在");
+    return;
+  }
+  if (id == activeAcProfileId) snapshotConfigToProfile(acProfiles[idx]);
+  updateAcProfileFromJson(acProfiles[idx], doc.as<JsonObject>());
+  if (id == activeAcProfileId) applyProfileToConfig(acProfiles[idx]);
+  saveConfig();
+  sendJsonResponse(200, acProfilesJson());
+}
+
+void handleAcProfileSelectPost() {
+  JsonDocument doc;
+  if (!parseBody(doc)) return;
+  uint8_t id = doc["id"] | activeAcProfileId;
+  int nextIdx = findAcProfileIndexById(id);
+  if (nextIdx < 0) {
+    sendError(404, "空调方案不存在");
+    return;
+  }
+  int currentIdx = findAcProfileIndexById(activeAcProfileId);
+  if (currentIdx >= 0) snapshotConfigToProfile(acProfiles[currentIdx]);
+  activeAcProfileId = id;
+  applyProfileToConfig(acProfiles[nextIdx]);
+  saveConfig();
+  sendJsonResponse(200, acProfilesJson());
+}
+
+void handleAcProfileDeletePost() {
+  JsonDocument doc;
+  if (!parseBody(doc)) return;
+  uint8_t id = doc["id"] | 0;
+  int idx = findAcProfileIndexById(id);
+  if (idx < 0) {
+    sendError(404, "空调方案不存在");
+    return;
+  }
+  if (acProfileCount <= 1) {
+    sendError(409, "至少保留一个空调方案");
+    return;
+  }
+  for (uint8_t i = idx; i + 1 < acProfileCount; i++) acProfiles[i] = acProfiles[i + 1];
+  acProfileCount--;
+  if (activeAcProfileId == id) {
+    activeAcProfileId = acProfiles[0].id;
+    applyProfileToConfig(acProfiles[0]);
+  }
+  saveConfig();
+  sendJsonResponse(200, acProfilesJson());
+}
+
+void handleCompareAcCodePost() {
+  if (!lastCapture.available) {
+    sendError(409, "请先用实体遥控器发送同一组合，让控制器捕获到基准编码");
+    return;
+  }
+  CaptureSnapshot reference = lastCapture;
+  JsonDocument doc;
+  if (!parseBody(doc)) return;
+  AcRequest request;
+  request.power = doc["power"] | config.remotePower;
+  request.mode = doc["mode"] | config.remoteMode;
+  request.fan = doc["fan"] | config.remoteFan;
+  request.degrees = clampFloat(doc["degrees"] | config.remoteDegrees, 16.0f, 32.0f);
+  request.turbo = doc["turbo"] | config.remoteTurbo;
+  request.quiet = doc["quiet"] | config.remoteQuiet;
+  request.sleep = doc["sleep"] | config.remoteSleep;
+  request.swingV = doc["swingV"] | config.remoteSwingV;
+  request.swingH = doc["swingH"] | config.remoteSwingH;
+  request.filter = doc["filter"] | config.remoteFilter;
+  uint32_t timeoutMs = constrain(static_cast<uint32_t>(doc["timeoutMs"] | 4500), 1200UL, 8000UL);
+
+  SelfTestReport generatedReport = runAcSelfTest(request, timeoutMs);
+  CaptureSnapshot generated = lastCapture;
+  lastCapture = reference;
+
+  String strictMismatches;
+  bool strictOk = generatedReport.received && strictCaptureEqual(reference, generated, strictMismatches);
+
+  String semanticMismatches;
+  stdAc::state_t referenceState;
+  stdAc::state_t generatedState;
+  bool referenceDecoded = snapshotToCommonState(reference, &referenceState, &generatedReport.expectedState);
+  bool generatedDecoded = snapshotToCommonState(generated, &generatedState, &generatedReport.expectedState);
+  bool semanticOk = false;
+  if (referenceDecoded && generatedDecoded) {
+    semanticOk = commonStatesSemanticallyEqual(referenceState, generatedState, semanticMismatches);
+  } else {
+    if (!referenceDecoded) appendCodeCompareMismatch(semanticMismatches, "实体遥控器编码无法解析为空调状态");
+    if (!generatedDecoded) appendCodeCompareMismatch(semanticMismatches, "控制器生成编码无法解析为空调状态");
+  }
+
+  String message;
+  bool ok = false;
+  if (!generatedReport.received) {
+    message = "控制器发码后本机未收到，无法对比生成编码";
+  } else if (strictOk && semanticOk) {
+    message = "严格编码一致，离线适配可信度最高";
+    ok = true;
+  } else if (semanticOk) {
+    message = "语义一致但原始编码不同，可能存在时钟/显示/定时位差异";
+  } else {
+    message = "编码不一致，当前库设置不建议用于控制这台空调";
+  }
+
+  String out;
+  out.reserve(2200);
+  out += "{\"ok\":";
+  out += ok ? "true" : "false";
+  out += ",\"strictOk\":";
+  out += strictOk ? "true" : "false";
+  out += ",\"semanticOk\":";
+  out += semanticOk ? "true" : "false";
+  out += ",\"referenceDecoded\":";
+  out += referenceDecoded ? "true" : "false";
+  out += ",\"generatedDecoded\":";
+  out += generatedDecoded ? "true" : "false";
+  out += ",\"message\":";
+  out += jsonString(message);
+  out += ",\"strictMismatches\":";
+  out += codeCompareMismatchesJson(strictMismatches);
+  out += ",\"semanticMismatches\":";
+  out += codeCompareMismatchesJson(semanticMismatches);
+  out += ",\"reference\":";
+  out += captureSnapshotJson(reference);
+  out += ",\"generated\":";
+  out += captureSnapshotJson(generated);
+  out += ",\"selfTest\":";
+  out += selfTestReportJson(generatedReport);
+  out += "}";
+  addDecisionLog(ok ? "code_match_ok" : "code_match_bad", "manual", message.c_str(), roomTempC, NAN, request.degrees);
+  sendJsonResponse(200, out);
+}
+
 void handleRemoteStatePost() {
   JsonDocument doc;
   if (!parseBody(doc)) return;
@@ -7544,6 +8235,7 @@ void handleCurvePost() {
 }
 
 void applyConfigJson(JsonObject src) {
+  if (src["activeAcProfileId"].is<int>()) activeAcProfileId = src["activeAcProfileId"] | activeAcProfileId;
   if (src["acProtocol"].is<const char *>()) config.acProtocol = strToDecodeType((src["acProtocol"] | "UNKNOWN"));
   if (src["acModel"].is<int>()) config.acModel = src["acModel"] | config.acModel;
   if (src["autoEnabled"].is<bool>()) config.autoEnabled = src["autoEnabled"] | config.autoEnabled;
@@ -7609,11 +8301,24 @@ void applyConfigJson(JsonObject src) {
       config.curveCount = 1;
     }
   }
+  JsonArray profiles = src["acProfiles"].as<JsonArray>();
+  if (!profiles.isNull()) {
+    acProfileCount = 0;
+    for (JsonObject item : profiles) {
+      if (acProfileCount >= kMaxAcProfiles) break;
+      loadAcProfileFromJson(acProfiles[acProfileCount], item);
+      if (acProfiles[acProfileCount].id == 0) acProfiles[acProfileCount].id = nextAcProfileId();
+      acProfileCount++;
+    }
+  }
   config.minSetpoint = 16.0f;
   config.maxSetpoint = 32.0f;
   normalizeCurveControlConfig();
   normalizeTuningConfig();
   normalizeConfigRemoteState();
+  ensureAcProfiles();
+  int activeIdx = findAcProfileIndexById(activeAcProfileId);
+  if (!profiles.isNull() && activeIdx >= 0) applyProfileToConfig(acProfiles[activeIdx]);
 }
 
 void handleSettingsPost() {
@@ -7763,6 +8468,12 @@ void setupRoutes() {
   server.on("/api/ota", HTTP_POST, handleOtaFinish, handleOtaUpload);
   server.on("/api/send-ac", HTTP_POST, handleSendAcPost);
   server.on("/api/self-test-ac", HTTP_POST, handleSelfTestAcPost);
+  server.on("/api/compare-ac-code", HTTP_POST, handleCompareAcCodePost);
+  server.on("/api/ac-profiles", HTTP_GET, handleAcProfilesGet);
+  server.on("/api/ac-profile/create", HTTP_POST, handleAcProfileCreatePost);
+  server.on("/api/ac-profile/update", HTTP_POST, handleAcProfileUpdatePost);
+  server.on("/api/ac-profile/select", HTTP_POST, handleAcProfileSelectPost);
+  server.on("/api/ac-profile/delete", HTTP_POST, handleAcProfileDeletePost);
   server.on("/api/remote-state", HTTP_POST, handleRemoteStatePost);
   server.on("/api/create-preset", HTTP_POST, handlePresetCreatePost);
   server.on("/api/update-preset", HTTP_POST, handlePresetUpdatePost);
@@ -7839,6 +8550,30 @@ void setupRoutes() {
     }
     if (method == HTTP_POST && uri == "/api/self-test-ac") {
       handleSelfTestAcPost();
+      return;
+    }
+    if (method == HTTP_POST && uri == "/api/compare-ac-code") {
+      handleCompareAcCodePost();
+      return;
+    }
+    if (method == HTTP_GET && uri == "/api/ac-profiles") {
+      handleAcProfilesGet();
+      return;
+    }
+    if (method == HTTP_POST && uri == "/api/ac-profile/create") {
+      handleAcProfileCreatePost();
+      return;
+    }
+    if (method == HTTP_POST && uri == "/api/ac-profile/update") {
+      handleAcProfileUpdatePost();
+      return;
+    }
+    if (method == HTTP_POST && uri == "/api/ac-profile/select") {
+      handleAcProfileSelectPost();
+      return;
+    }
+    if (method == HTTP_POST && uri == "/api/ac-profile/delete") {
+      handleAcProfileDeletePost();
       return;
     }
     if (method == HTTP_POST && uri == "/api/remote-state") {
