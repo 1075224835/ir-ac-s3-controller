@@ -175,6 +175,25 @@ struct AcRequest {
   bool filter = false;
 };
 
+struct SelfTestReport {
+  bool ok = false;
+  bool sent = false;
+  bool received = false;
+  bool protocolOk = false;
+  bool decodedState = false;
+  bool stateOk = false;
+  String message;
+  String mismatches;
+  AcRequest expectedRequest;
+  stdAc::state_t expectedState;
+  stdAc::state_t receivedState;
+  decode_type_t receivedProtocol = decode_type_t::UNKNOWN;
+  uint16_t receivedBits = 0;
+  uint64_t receivedValue = 0;
+  String receivedSummary;
+  String receivedAcDescription;
+};
+
 enum class PendingAction : uint8_t {
   None,
   SendAc,
@@ -1282,7 +1301,9 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     </div>
     <div class="actions">
       <button onclick="sendAc()">立即发送</button>
+      <button class="secondary" type="button" onclick="selfTestAc()">自发自收校验</button>
     </div>
+    <div class="label" id="selfTestResult">校验会实际发射一次当前红外指令。</div>
     <div class="preset-panel">
       <div class="preset-head">
         <div>
@@ -3175,6 +3196,39 @@ async function sendAc(){
   try {
     await post('/api/send-ac', remoteCommandPayload(), '红外命令已发送');
   } catch(e) { msg(e.message || '发送失败', true); }
+}
+function formatSelfTestResult(data){
+  if (!data) return '未获得校验结果';
+  const parts = [
+    data.message || (data.ok ? '自发自收校验通过' : '自发自收校验未通过'),
+    `发送 ${data.sent ? '成功' : '失败'}`,
+    `接收 ${data.received ? '成功' : '失败'}`,
+    `协议 ${data.protocolOk ? '一致' : '不一致'}`,
+    `字段 ${data.stateOk ? '一致' : '不一致'}`
+  ];
+  if (data.receivedProtocol) parts.push(`收到 ${data.receivedProtocol} / ${data.receivedBits || 0} bits`);
+  if (data.mismatches && data.mismatches.length) parts.push(`差异：${data.mismatches.join('，')}`);
+  if (data.expected && data.expected.power === false) parts.push('关机命令主要校验协议和电源位；开机状态可校验温度/风速等字段');
+  return parts.join(' · ');
+}
+async function selfTestAc(){
+  const box = $('selfTestResult');
+  try {
+    if (box) box.textContent = '正在发射并监听本机接收头...';
+    msg('正在执行自发自收校验...');
+    const data = await fetchJsonSafe('/api/self-test-ac', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign(remoteCommandPayload(), {timeoutMs:4500}))
+    }, '自发自收校验', 0, 12000);
+    const text = formatSelfTestResult(data);
+    if (box) box.textContent = text;
+    msg(data.ok ? '自发自收校验通过' : '自发自收校验未通过', !data.ok);
+    await refresh(true);
+  } catch(e) {
+    if (box) box.textContent = e.message || '自发自收校验失败';
+    msg(e.message || '自发自收校验失败', true);
+  }
 }
 async function createPresetFromCurrent(){
   const current = remoteCommandPayload();
@@ -5760,25 +5814,29 @@ void updateSensor() {
   recordTemperatureHistory();
 }
 
-void captureIrIfAvailable() {
-  if (irBusy) return;
-  if (!irrecv.decode(&irResults)) return;
-
+void storeCaptureSnapshot(const decode_results &results) {
   lastCapture.available = true;
-  lastCapture.protocol = irResults.decode_type;
-  lastCapture.bits = irResults.bits;
-  lastCapture.value = irResults.value;
-  lastCapture.summary = resultToHumanReadableBasic(&irResults);
-  lastCapture.acDescription = IRAcUtils::resultAcToString(&irResults);
+  lastCapture.protocol = results.decode_type;
+  lastCapture.bits = results.bits;
+  lastCapture.value = results.value;
+  lastCapture.summary = resultToHumanReadableBasic(&results);
+  lastCapture.acDescription = IRAcUtils::resultAcToString(&results);
   lastCapture.capturedAtMs = millis();
 
-  uint16_t correctedLen = getCorrectedRawLength(&irResults);
+  uint16_t correctedLen = getCorrectedRawLength(&results);
   lastCapture.rawLen = correctedLen > kMaxRawPulses ? kMaxRawPulses : correctedLen;
-  uint16_t *raw = resultToRawArray(&irResults);
+  uint16_t *raw = resultToRawArray(&results);
   if (raw != nullptr) {
     for (uint16_t i = 0; i < lastCapture.rawLen; i++) lastCapture.raw[i] = raw[i];
     delete[] raw;
   }
+}
+
+void captureIrIfAvailable() {
+  if (irBusy) return;
+  if (!irrecv.decode(&irResults)) return;
+
+  storeCaptureSnapshot(irResults);
 
   irrecv.resume();
 }
@@ -5863,6 +5921,239 @@ void rememberAcState(const AcRequest &request) {
   config.remoteSwingH = request.swingH;
   config.remoteFilter = request.filter;
   saveConfig();
+}
+
+AcRequest currentRemoteRequest() {
+  AcRequest request;
+  request.power = config.remotePower;
+  request.mode = config.remoteMode;
+  request.fan = config.remoteFan;
+  request.degrees = config.remoteDegrees;
+  request.turbo = config.remoteTurbo;
+  request.quiet = config.remoteQuiet;
+  request.sleep = config.remoteSleep;
+  request.swingV = config.remoteSwingV;
+  request.swingH = config.remoteSwingH;
+  request.filter = config.remoteFilter;
+  return normalizedAcRequest(request);
+}
+
+bool waitForSelfTestDecode(uint32_t timeoutMs) {
+  uint32_t startMs = millis();
+  while (millis() - startMs < timeoutMs) {
+    if (irrecv.decode(&irResults)) return true;
+    delay(12);
+    yield();
+  }
+  return false;
+}
+
+bool stateSwingVActive(stdAc::swingv_t swing) {
+  return swing != stdAc::swingv_t::kOff;
+}
+
+bool stateSwingHActive(stdAc::swingh_t swing) {
+  return swing != stdAc::swingh_t::kOff;
+}
+
+void appendSelfTestMismatch(SelfTestReport &report, const String &text) {
+  if (report.mismatches.length()) report.mismatches += "|";
+  report.mismatches += text;
+}
+
+void compareSelfTestState(SelfTestReport &report) {
+  const stdAc::state_t &expected = report.expectedState;
+  const stdAc::state_t &received = report.receivedState;
+  report.stateOk = true;
+
+  if (received.power != expected.power) {
+    appendSelfTestMismatch(report, "电源不一致");
+    report.stateOk = false;
+  }
+
+  if (!expected.power) return;
+
+  if (received.mode != expected.mode) {
+    appendSelfTestMismatch(report, "模式不一致");
+    report.stateOk = false;
+  }
+  if (fabs(received.degrees - expected.degrees) > 0.25f) {
+    appendSelfTestMismatch(report, "温度不一致");
+    report.stateOk = false;
+  }
+  if (received.fanspeed != expected.fanspeed) {
+    appendSelfTestMismatch(report, "风速不一致");
+    report.stateOk = false;
+  }
+  if (received.turbo != expected.turbo) {
+    appendSelfTestMismatch(report, "强劲状态不一致");
+    report.stateOk = false;
+  }
+  if (received.quiet != expected.quiet) {
+    appendSelfTestMismatch(report, "静音状态不一致");
+    report.stateOk = false;
+  }
+  if ((received.sleep >= 0) != (expected.sleep >= 0)) {
+    appendSelfTestMismatch(report, "睡眠状态不一致");
+    report.stateOk = false;
+  }
+  if (stateSwingVActive(received.swingv) != stateSwingVActive(expected.swingv)) {
+    appendSelfTestMismatch(report, "上下摆风不一致");
+    report.stateOk = false;
+  }
+  if (stateSwingHActive(received.swingh) != stateSwingHActive(expected.swingh)) {
+    appendSelfTestMismatch(report, "左右摆风不一致");
+    report.stateOk = false;
+  }
+  if (received.filter != expected.filter) {
+    appendSelfTestMismatch(report, "滤网/出风口状态不一致");
+    report.stateOk = false;
+  }
+}
+
+String selfTestStateJson(const stdAc::state_t &state) {
+  String out;
+  out.reserve(256);
+  out += "{\"protocol\":";
+  out += jsonString(typeToString(state.protocol));
+  out += ",\"model\":";
+  out += String(state.model);
+  out += ",\"power\":";
+  out += state.power ? "true" : "false";
+  out += ",\"mode\":";
+  out += jsonString(IRac::opmodeToString(state.mode));
+  out += ",\"degrees\":";
+  out += String(state.degrees, 1);
+  out += ",\"fan\":";
+  out += jsonString(IRac::fanspeedToString(state.fanspeed));
+  out += ",\"turbo\":";
+  out += state.turbo ? "true" : "false";
+  out += ",\"quiet\":";
+  out += state.quiet ? "true" : "false";
+  out += ",\"sleep\":";
+  out += state.sleep >= 0 ? "true" : "false";
+  out += ",\"swingV\":";
+  out += stateSwingVActive(state.swingv) ? "true" : "false";
+  out += ",\"swingH\":";
+  out += stateSwingHActive(state.swingh) ? "true" : "false";
+  out += ",\"filter\":";
+  out += state.filter ? "true" : "false";
+  out += "}";
+  return out;
+}
+
+String selfTestReportJson(const SelfTestReport &report) {
+  String out;
+  out.reserve(1200);
+  out += "{\"ok\":";
+  out += report.ok ? "true" : "false";
+  out += ",\"sent\":";
+  out += report.sent ? "true" : "false";
+  out += ",\"received\":";
+  out += report.received ? "true" : "false";
+  out += ",\"protocolOk\":";
+  out += report.protocolOk ? "true" : "false";
+  out += ",\"decodedState\":";
+  out += report.decodedState ? "true" : "false";
+  out += ",\"stateOk\":";
+  out += report.stateOk ? "true" : "false";
+  out += ",\"message\":";
+  out += jsonString(report.message);
+  out += ",\"expected\":";
+  out += selfTestStateJson(report.expectedState);
+  out += ",\"receivedProtocol\":";
+  out += jsonString(typeToString(report.receivedProtocol));
+  out += ",\"receivedBits\":";
+  out += String(report.receivedBits);
+  out += ",\"receivedValue\":";
+  out += jsonString(uint64ToHexString(report.receivedValue));
+  out += ",\"receivedSummary\":";
+  out += jsonString(report.receivedSummary);
+  out += ",\"receivedAcDescription\":";
+  out += jsonString(report.receivedAcDescription);
+  out += ",\"receivedState\":";
+  out += report.decodedState ? selfTestStateJson(report.receivedState) : String("null");
+  out += ",\"mismatches\":[";
+  int start = 0;
+  bool first = true;
+  while (start < report.mismatches.length()) {
+    int end = report.mismatches.indexOf('|', start);
+    if (end < 0) end = report.mismatches.length();
+    if (!first) out += ",";
+    out += jsonString(report.mismatches.substring(start, end));
+    first = false;
+    start = end + 1;
+  }
+  out += "]}";
+  return out;
+}
+
+SelfTestReport runAcSelfTest(const AcRequest &request, uint32_t timeoutMs = 3500) {
+  SelfTestReport report;
+  report.expectedRequest = normalizedAcRequest(request);
+
+  if (!IRac::isProtocolSupported(config.acProtocol)) {
+    report.message = "当前空调协议不支持库发送，无法自发自收校验";
+    lastActionResult = "self-test failed: unsupported protocol";
+    addDecisionLog("self_test_failed", "manual", report.message.c_str(), roomTempC, NAN, report.expectedRequest.degrees);
+    return report;
+  }
+
+  irBusy = true;
+  irrecv.resume();
+  delay(80);
+
+  prepareAcState(report.expectedRequest);
+  report.expectedState = ac.next;
+  report.sent = ac.sendAc();
+  if (!report.sent) {
+    irBusy = false;
+    report.message = "红外发送失败，未执行接收校验";
+    lastActionResult = "self-test failed: send failed";
+    addDecisionLog("self_test_failed", "manual", report.message.c_str(), roomTempC, NAN, report.expectedRequest.degrees);
+    return report;
+  }
+
+  report.received = waitForSelfTestDecode(timeoutMs);
+  if (report.received) {
+    storeCaptureSnapshot(irResults);
+    report.receivedProtocol = irResults.decode_type;
+    report.receivedBits = irResults.bits;
+    report.receivedValue = irResults.value;
+    report.receivedSummary = resultToHumanReadableBasic(&irResults);
+    report.receivedAcDescription = IRAcUtils::resultAcToString(&irResults);
+    report.protocolOk = report.receivedProtocol == config.acProtocol;
+    report.decodedState = IRAcUtils::decodeToState(&irResults, &report.receivedState, &report.expectedState);
+    if (!report.protocolOk) appendSelfTestMismatch(report, "协议不一致");
+    if (report.decodedState) {
+      compareSelfTestState(report);
+    } else {
+      appendSelfTestMismatch(report, "无法解析为空调通用状态");
+      report.stateOk = false;
+    }
+    irrecv.resume();
+  }
+
+  irBusy = false;
+
+  if (!report.received) {
+    report.message = "已发送，但本机接收头未收到红外；请调整发射管和接收头位置";
+    lastActionResult = "self-test failed: no receive";
+  } else if (report.protocolOk && report.decodedState && report.stateOk) {
+    report.ok = true;
+    report.message = "自发自收校验通过";
+    lastActionResult = "self-test passed " + typeToString(report.receivedProtocol);
+  } else {
+    report.message = "自发自收校验未通过：" + report.mismatches;
+    lastActionResult = "self-test failed: " + report.mismatches;
+  }
+
+  rememberAcState(report.expectedRequest);
+  if (report.expectedRequest.power) lastSentSetpoint = report.expectedRequest.degrees;
+  addControlEvent("manual", report.ok ? "self_test" : "failed", report.expectedRequest, NAN, report.expectedRequest.degrees);
+  addDecisionLog(report.ok ? "self_test_ok" : "self_test_failed", "manual", report.message.c_str(),
+                 roomTempC, NAN, report.expectedRequest.degrees);
+  return report;
 }
 
 bool sendAcNow(const AcRequest &request, const char *source = "manual", const char *action = "send",
@@ -6790,6 +7081,32 @@ void runSerialWifiScan() {
   printWifiScanResultsToSerial(found);
 }
 
+void runSerialSelfTest(bool forcePowerOn = false) {
+  AcRequest request = currentRemoteRequest();
+  if (forcePowerOn) request.power = true;
+  Serial.println("Serial IR self-test command received");
+  Serial.println("protocol=" + typeToString(config.acProtocol) +
+                 " model=" + String(config.acModel) +
+                 " power=" + String(request.power ? "on" : "off") +
+                 " mode=" + request.mode +
+                 " temp=" + String(request.degrees, 1) +
+                 " fan=" + request.fan);
+  SelfTestReport report = runAcSelfTest(request, 4500);
+  Serial.println(report.message);
+  Serial.println("sent=" + String(report.sent ? 1 : 0) +
+                 " received=" + String(report.received ? 1 : 0) +
+                 " protocolOk=" + String(report.protocolOk ? 1 : 0) +
+                 " decodedState=" + String(report.decodedState ? 1 : 0) +
+                 " stateOk=" + String(report.stateOk ? 1 : 0));
+  if (report.received) {
+    Serial.println("received protocol=" + typeToString(report.receivedProtocol) +
+                   " bits=" + String(report.receivedBits) +
+                   " value=" + uint64ToHexString(report.receivedValue));
+    Serial.println("received AC: " + report.receivedAcDescription);
+  }
+  if (report.mismatches.length()) Serial.println("mismatches=" + report.mismatches);
+}
+
 void handleSerialConsole() {
   while (Serial.available() > 0) {
     char c = static_cast<char>(Serial.read());
@@ -6801,11 +7118,15 @@ void handleSerialConsole() {
         cmd.toLowerCase();
         if (cmd == "wifi-scan" || cmd == "scan") {
           runSerialWifiScan();
+        } else if (cmd == "self-test" || cmd == "ir-test") {
+          runSerialSelfTest(false);
+        } else if (cmd == "self-test-on" || cmd == "ir-test-on") {
+          runSerialSelfTest(true);
         } else if (cmd == "help" || cmd == "?") {
-          Serial.println("Commands: wifi-scan, scan, help");
+          Serial.println("Commands: wifi-scan, scan, self-test, self-test-on, ir-test, ir-test-on, help");
         } else {
           Serial.println("Unknown command: " + serialCommandBuffer);
-          Serial.println("Commands: wifi-scan, scan, help");
+          Serial.println("Commands: wifi-scan, scan, self-test, self-test-on, ir-test, ir-test-on, help");
         }
       }
       serialCommandBuffer = "";
@@ -6940,6 +7261,25 @@ void handleSendAcPost() {
   setPendingAcContext("manual", "send", NAN, pendingAc.degrees);
   pendingAction = PendingAction::SendAc;
   sendOk("ac send queued");
+}
+
+void handleSelfTestAcPost() {
+  JsonDocument doc;
+  if (!parseBody(doc)) return;
+  AcRequest request;
+  request.power = doc["power"] | config.remotePower;
+  request.mode = doc["mode"] | config.remoteMode;
+  request.fan = doc["fan"] | config.remoteFan;
+  request.degrees = clampFloat(doc["degrees"] | config.remoteDegrees, 16.0f, 32.0f);
+  request.turbo = doc["turbo"] | config.remoteTurbo;
+  request.quiet = doc["quiet"] | config.remoteQuiet;
+  request.sleep = doc["sleep"] | config.remoteSleep;
+  request.swingV = doc["swingV"] | config.remoteSwingV;
+  request.swingH = doc["swingH"] | config.remoteSwingH;
+  request.filter = doc["filter"] | config.remoteFilter;
+  uint32_t timeoutMs = constrain(static_cast<uint32_t>(doc["timeoutMs"] | 3500), 1200UL, 8000UL);
+  SelfTestReport report = runAcSelfTest(request, timeoutMs);
+  sendJsonResponse(200, selfTestReportJson(report));
 }
 
 void handleRemoteStatePost() {
@@ -7422,6 +7762,7 @@ void setupRoutes() {
   server.on("/api/config-import", HTTP_POST, handleConfigImport);
   server.on("/api/ota", HTTP_POST, handleOtaFinish, handleOtaUpload);
   server.on("/api/send-ac", HTTP_POST, handleSendAcPost);
+  server.on("/api/self-test-ac", HTTP_POST, handleSelfTestAcPost);
   server.on("/api/remote-state", HTTP_POST, handleRemoteStatePost);
   server.on("/api/create-preset", HTTP_POST, handlePresetCreatePost);
   server.on("/api/update-preset", HTTP_POST, handlePresetUpdatePost);
@@ -7494,6 +7835,10 @@ void setupRoutes() {
     }
     if (method == HTTP_POST && uri == "/api/send-ac") {
       handleSendAcPost();
+      return;
+    }
+    if (method == HTTP_POST && uri == "/api/self-test-ac") {
+      handleSelfTestAcPost();
       return;
     }
     if (method == HTTP_POST && uri == "/api/remote-state") {
