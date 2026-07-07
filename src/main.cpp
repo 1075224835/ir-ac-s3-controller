@@ -248,6 +248,9 @@ uint32_t lastControlMs = 0;
 uint32_t lastWifiAttemptMs = 0;
 uint32_t wifiConnectStartMs = 0;
 bool wifiScanActive = false;
+String wifiScanCacheNetworks;
+uint8_t wifiScanCacheCount = 0;
+uint32_t wifiScanCacheMs = 0;
 bool ntpConfigured = false;
 bool apStarted = false;
 bool sleepCurveWasActive = false;
@@ -1604,6 +1607,20 @@ let remoteStateSaveTimer = 0;
 const openPresetSchedules = new Set();
 let apiQueue = Promise.resolve();
 function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+function cleanFetchErrorText(text, label='数据', status=0){
+  const raw = String(text || '').trim();
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.message) return String(parsed.message);
+    } catch(e) {}
+  }
+  if (!raw) return `${label}获取失败${status ? `（HTTP ${status}）` : ''}`;
+  if (raw.length > 180 || /<html|<!doctype|stack|trace|exception|function\\s|void\\s|#include/i.test(raw)) {
+    return `${label}获取失败${status ? `（HTTP ${status}）` : ''}`;
+  }
+  return raw;
+}
 async function fetchTextSafe(url, options={}, label='数据', retries=1, timeoutMs=22000, serial=true){
   const run = async () => {
     let lastError = null;
@@ -1613,7 +1630,7 @@ async function fetchTextSafe(url, options={}, label='数据', retries=1, timeout
       try {
         const r = await fetch(url, Object.assign({}, options, controller ? {signal:controller.signal} : {}));
         const text = await r.text();
-        if (!r.ok) throw new Error(text || `${label}获取失败`);
+        if (!r.ok) throw new Error(cleanFetchErrorText(text, label, r.status));
         if (!text.trim()) throw new Error(`${label}返回为空`);
         return text;
       } catch(e) {
@@ -3129,7 +3146,12 @@ async function scanWifiNetworks(){
     if (box) box.innerHTML = '<div class="empty">正在扫描附近热点...</div>';
     const data = await fetchJsonSafe('/api/wifi-scan', {}, '热点扫描', 0, 25000);
     renderWifiScan(data.networks || []);
-    msg(`扫描完成：${data.count || 0} 个热点`);
+    if (data.cached) {
+      const age = Number(data.ageSec || 0);
+      msg(`实时扫描失败，显示约 ${age} 秒前缓存：${data.count || 0} 个热点`, true);
+    } else {
+      msg(`扫描完成：${data.count || 0} 个热点`);
+    }
   } catch(e) {
     if (box) box.innerHTML = `<div class="empty">${esc(e.message || '热点扫描失败')}</div>`;
     msg(e.message || '热点扫描失败', true);
@@ -4242,6 +4264,20 @@ function setMsg(text, warn=false){
   $('msg').style.color = warn ? 'var(--danger)' : 'var(--accent)';
 }
 function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+function cleanFetchErrorText(text, label='数据', status=0){
+  const raw = String(text || '').trim();
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.message) return String(parsed.message);
+    } catch(e) {}
+  }
+  if (!raw) return `${label}获取失败${status ? `（HTTP ${status}）` : ''}`;
+  if (raw.length > 180 || /<html|<!doctype|stack|trace|exception|function\\s|void\\s|#include/i.test(raw)) {
+    return `${label}获取失败${status ? `（HTTP ${status}）` : ''}`;
+  }
+  return raw;
+}
 async function fetchTextSafe(url, options={}, label='数据', retries=1, timeoutMs=22000){
   let lastError = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -4250,7 +4286,7 @@ async function fetchTextSafe(url, options={}, label='数据', retries=1, timeout
     try {
       const r = await fetch(url, Object.assign({}, options, controller ? {signal:controller.signal} : {}));
       const text = await r.text();
-      if (!r.ok) throw new Error(text || `${label}获取失败`);
+      if (!r.ok) throw new Error(cleanFetchErrorText(text, label, r.status));
       if (!text.trim()) throw new Error(`${label}返回为空`);
       return text;
     } catch(e) {
@@ -6724,8 +6760,20 @@ int performWifiScan() {
 }
 
 void handleWifiScan() {
+  Serial.println("WiFi scan request received mode=" + String(static_cast<int>(WiFi.getMode())) +
+                 " status=" + String(static_cast<int>(WiFi.status())) +
+                 " ap=" + String(apStarted ? 1 : 0));
   int found = performWifiScan();
   if (found < 0) {
+    Serial.println("WiFi scan failed result " + String(found));
+    if (wifiScanCacheMs > 0) {
+      uint32_t ageSec = (millis() - wifiScanCacheMs) / 1000;
+      String cached = "{\"count\":" + String(wifiScanCacheCount) +
+                      ",\"cached\":true,\"ageSec\":" + String(ageSec) +
+                      ",\"networks\":[" + wifiScanCacheNetworks + "]}";
+      sendJsonResponse(200, cached);
+      return;
+    }
     sendError(503, "热点扫描失败，请稍后重试");
     return;
   }
@@ -6790,7 +6838,10 @@ void handleWifiScan() {
   }
 
   WiFi.scanDelete();
-  String out = "{\"count\":" + String(emittedCount) + ",\"networks\":[" + networks + "]}";
+  wifiScanCacheNetworks = networks;
+  wifiScanCacheCount = emittedCount;
+  wifiScanCacheMs = millis();
+  String out = "{\"count\":" + String(emittedCount) + ",\"cached\":false,\"ageSec\":0,\"networks\":[" + networks + "]}";
   sendJsonResponse(200, out);
 }
 
