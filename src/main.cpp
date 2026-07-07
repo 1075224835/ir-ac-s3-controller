@@ -247,6 +247,7 @@ float pendingAcSetpoint = NAN;
 uint32_t lastControlMs = 0;
 uint32_t lastWifiAttemptMs = 0;
 uint32_t wifiConnectStartMs = 0;
+bool wifiScanActive = false;
 bool ntpConfigured = false;
 bool apStarted = false;
 bool sleepCurveWasActive = false;
@@ -5290,6 +5291,7 @@ void startWifi() {
 }
 
 void maintainWifi() {
+  if (wifiScanActive) return;
   if (!hasStationCredentials()) return;
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -6669,7 +6671,10 @@ void prepareWifiScanMode() {
   if (apStarted && !connected) {
     WiFi.mode(WIFI_AP_STA);
     disableWifiPowerSave();
-    delay(180);
+    esp_wifi_disconnect();
+    wifiConnectStartMs = 0;
+    lastWifiAttemptMs = millis();
+    delay(220);
   } else if (!apStarted && !connected) {
     WiFi.mode(WIFI_STA);
     disableWifiPowerSave();
@@ -6680,24 +6685,41 @@ void prepareWifiScanMode() {
 }
 
 int performWifiScan() {
+  wifiScanActive = true;
   prepareWifiScanMode();
   waitForWifiScanIdle(2500);
 
   int found = WIFI_SCAN_FAILED;
   for (uint8_t attempt = 0; attempt < 2; attempt++) {
     WiFi.scanDelete();
-    found = WiFi.scanNetworks(false, true, false, 180, 0);
-    if (found >= 0) return found;
+    bool passive = attempt == 1;
+    uint32_t maxMs = passive ? 120 : 180;
+    found = WiFi.scanNetworks(false, true, passive, maxMs, 0);
+    Serial.println("WiFi scan attempt " + String(attempt + 1) +
+                   (passive ? " passive" : " active") +
+                   " result " + String(found));
+    if (found >= 0) {
+      wifiScanActive = false;
+      lastWifiAttemptMs = millis();
+      return found;
+    }
 
     if (found == WIFI_SCAN_RUNNING) {
       int completed = waitForWifiScanIdle(4000);
-      if (completed >= 0) return completed;
+      Serial.println("WiFi scan completed after wait result " + String(completed));
+      if (completed >= 0) {
+        wifiScanActive = false;
+        lastWifiAttemptMs = millis();
+        return completed;
+      }
     } else {
       esp_wifi_scan_stop();
       WiFi.scanDelete();
     }
     delay(180 + attempt * 220);
   }
+  wifiScanActive = false;
+  lastWifiAttemptMs = millis();
   return found;
 }
 
