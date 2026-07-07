@@ -5204,6 +5204,10 @@ bool useDefaultStaticIp() {
   return config.staSsid == kDefaultWifiSsid && strlen(kDefaultWifiStaticIp) > 0;
 }
 
+bool hasStationCredentials() {
+  return config.staSsid.length() > 0 && config.staPassword.length() > 0;
+}
+
 void configureStationIp() {
   IPAddress localIp;
   IPAddress gateway;
@@ -5230,10 +5234,33 @@ void disableWifiPowerSave() {
 }
 
 void startAccessPoint() {
-  if (apStarted) return;
-  WiFi.softAP(kApSsid, kApPassword);
+  if (apStarted && WiFi.softAPIP() != IPAddress(0, 0, 0, 0)) return;
+
+  if (hasStationCredentials()) {
+    WiFi.mode(WIFI_AP_STA);
+  } else {
+    WiFi.mode(WIFI_AP);
+  }
+  disableWifiPowerSave();
+
+  bool ok = false;
+  for (uint8_t attempt = 0; attempt < 3 && !ok; attempt++) {
+    WiFi.softAPdisconnect(false);
+    delay(120);
+    ok = WiFi.softAP(kApSsid, kApPassword, 6, false, 4);
+    delay(250);
+    ok = ok && WiFi.softAPIP() != IPAddress(0, 0, 0, 0);
+  }
+
+  if (!ok) {
+    apStarted = false;
+    Serial.println("AP start failed");
+    return;
+  }
+
   dnsServer.start(53, "*", WiFi.softAPIP());
   apStarted = true;
+  Serial.println("AP started: " + String(kApSsid) + " IP " + WiFi.softAPIP().toString());
 }
 
 void stopAccessPoint() {
@@ -5247,7 +5274,7 @@ void startWifi() {
   WiFi.persistent(false);
   WiFi.setHostname(kHostname);
 
-  if (config.staSsid.length()) {
+  if (hasStationCredentials()) {
     WiFi.mode(WIFI_STA);
     disableWifiPowerSave();
     configureStationIp();
@@ -5263,7 +5290,7 @@ void startWifi() {
 }
 
 void maintainWifi() {
-  if (!config.staSsid.length()) return;
+  if (!hasStationCredentials()) return;
 
   if (WiFi.status() == WL_CONNECTED) {
     wifiConnectStartMs = 0;
@@ -5276,6 +5303,7 @@ void maintainWifi() {
   }
 
   if (!apStarted && wifiConnectStartMs && millis() - wifiConnectStartMs > kWifiApFallbackMs) {
+    Serial.println("STA connect timeout, opening AP fallback");
     WiFi.mode(WIFI_AP_STA);
     disableWifiPowerSave();
     startAccessPoint();
@@ -6579,13 +6607,13 @@ void handleWifiPost() {
   String newPassword = doc["password"] | "";
   newSsid.trim();
 
-  if (newSsid == kDefaultWifiSsid && newPassword.length() == 0) {
+  if (newSsid == kDefaultWifiSsid && newPassword.length() == 0 && strlen(kDefaultWifiPassword) > 0) {
     newPassword = kDefaultWifiPassword;
   } else if (newSsid.length() && newPassword.length() == 0) {
     if (newSsid == config.staSsid && config.staPassword.length() > 0) {
       newPassword = config.staPassword;
     } else {
-      sendError(400, "WiFi password is required for a new SSID");
+      sendError(400, "请输入 WiFi 密码；如果是开放热点，请先清除 WiFi 后再配置");
       return;
     }
   }
@@ -6598,7 +6626,7 @@ void handleWifiPost() {
   wifiConnectStartMs = 0;
   lastWifiAttemptMs = millis();
   ntpConfigured = false;
-  if (config.staSsid.length()) {
+  if (hasStationCredentials()) {
     WiFi.mode(WIFI_STA);
     disableWifiPowerSave();
     configureStationIp();
@@ -6612,18 +6640,71 @@ void handleWifiPost() {
   sendOk("wifi saved");
 }
 
-void handleWifiScan() {
-  if (apStarted && WiFi.status() != WL_CONNECTED) {
-    WiFi.mode(WIFI_AP_STA);
-    disableWifiPowerSave();
-  } else if (!apStarted && WiFi.status() != WL_CONNECTED) {
-    WiFi.mode(WIFI_STA);
-    disableWifiPowerSave();
+int waitForWifiScanIdle(uint32_t timeoutMs) {
+  int status = WiFi.scanComplete();
+  if (status >= 0) {
+    WiFi.scanDelete();
+    return status;
+  }
+  if (status != WIFI_SCAN_RUNNING) return status;
+
+  uint32_t startMs = millis();
+  while (millis() - startMs < timeoutMs) {
+    delay(100);
+    status = WiFi.scanComplete();
+    if (status != WIFI_SCAN_RUNNING) {
+      WiFi.scanDelete();
+      return status;
+    }
   }
 
-  int found = WiFi.scanNetworks(false, true);
+  esp_wifi_scan_stop();
+  delay(80);
+  WiFi.scanDelete();
+  return WIFI_SCAN_FAILED;
+}
+
+void prepareWifiScanMode() {
+  bool connected = WiFi.status() == WL_CONNECTED;
+  if (apStarted && !connected) {
+    WiFi.mode(WIFI_AP_STA);
+    disableWifiPowerSave();
+    delay(180);
+  } else if (!apStarted && !connected) {
+    WiFi.mode(WIFI_STA);
+    disableWifiPowerSave();
+    delay(120);
+  } else {
+    disableWifiPowerSave();
+  }
+}
+
+int performWifiScan() {
+  prepareWifiScanMode();
+  waitForWifiScanIdle(2500);
+
+  int found = WIFI_SCAN_FAILED;
+  for (uint8_t attempt = 0; attempt < 2; attempt++) {
+    WiFi.scanDelete();
+    found = WiFi.scanNetworks(false, true, false, 180, 0);
+    if (found >= 0) return found;
+
+    if (found == WIFI_SCAN_RUNNING) {
+      int completed = waitForWifiScanIdle(4000);
+      if (completed >= 0) return completed;
+    } else {
+      esp_wifi_scan_stop();
+      WiFi.scanDelete();
+    }
+    delay(180 + attempt * 220);
+  }
+  return found;
+}
+
+void handleWifiScan() {
+  int found = performWifiScan();
   if (found < 0) {
-    sendError(503, "WiFi scan failed");
+    sendError(503, "热点扫描失败，请稍后重试");
     return;
   }
 
