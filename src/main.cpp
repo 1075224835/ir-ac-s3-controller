@@ -251,6 +251,7 @@ bool wifiScanActive = false;
 String wifiScanCacheNetworks;
 uint8_t wifiScanCacheCount = 0;
 uint32_t wifiScanCacheMs = 0;
+String serialCommandBuffer;
 bool ntpConfigured = false;
 bool apStarted = false;
 bool sleepCurveWasActive = false;
@@ -6759,6 +6760,61 @@ int performWifiScan() {
   return found;
 }
 
+void printWifiScanResultsToSerial(int found) {
+  if (found < 0) {
+    Serial.println("Serial WiFi scan failed result " + String(found));
+    return;
+  }
+
+  Serial.println("Serial WiFi scan found " + String(found) + " raw networks");
+  uint8_t limit = static_cast<uint8_t>(min(found, 64));
+  for (uint8_t i = 0; i < limit; i++) {
+    String ssid = WiFi.SSID(i);
+    ssid.trim();
+    if (!ssid.length()) ssid = "<hidden>";
+    bool open = WiFi.encryptionType(i) == WIFI_AUTH_OPEN;
+    Serial.println(String(i + 1) + ". " + ssid +
+                   " rssi=" + String(WiFi.RSSI(i)) +
+                   " ch=" + String(WiFi.channel(i)) +
+                   " auth=" + (open ? "open" : "secured"));
+  }
+  WiFi.scanDelete();
+}
+
+void runSerialWifiScan() {
+  Serial.println("Serial WiFi scan command received");
+  Serial.println("mode=" + String(static_cast<int>(WiFi.getMode())) +
+                 " status=" + String(static_cast<int>(WiFi.status())) +
+                 " ap=" + String(apStarted ? 1 : 0));
+  int found = performWifiScan();
+  printWifiScanResultsToSerial(found);
+}
+
+void handleSerialConsole() {
+  while (Serial.available() > 0) {
+    char c = static_cast<char>(Serial.read());
+    if (c == '\r') continue;
+    if (c == '\n') {
+      serialCommandBuffer.trim();
+      if (serialCommandBuffer.length()) {
+        String cmd = serialCommandBuffer;
+        cmd.toLowerCase();
+        if (cmd == "wifi-scan" || cmd == "scan") {
+          runSerialWifiScan();
+        } else if (cmd == "help" || cmd == "?") {
+          Serial.println("Commands: wifi-scan, scan, help");
+        } else {
+          Serial.println("Unknown command: " + serialCommandBuffer);
+          Serial.println("Commands: wifi-scan, scan, help");
+        }
+      }
+      serialCommandBuffer = "";
+    } else if (c >= 32 && c <= 126 && serialCommandBuffer.length() < 64) {
+      serialCommandBuffer += c;
+    }
+  }
+}
+
 void handleWifiScan() {
   Serial.println("WiFi scan request received mode=" + String(static_cast<int>(WiFi.getMode())) +
                  " status=" + String(static_cast<int>(WiFi.status())) +
@@ -7524,6 +7580,7 @@ void setup() {
 }
 
 void loop() {
+  handleSerialConsole();
   if (apStarted) dnsServer.processNextRequest();
   server.handleClient();
   maintainWifi();
