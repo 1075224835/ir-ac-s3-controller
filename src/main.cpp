@@ -6,6 +6,7 @@
 #include <IRrecv.h>
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
+#include <ir_Gree.h>
 #include <IRutils.h>
 #include <LittleFS.h>
 #include <Update.h>
@@ -86,13 +87,21 @@ struct LearnedCommand {
   uint8_t id = 0;
   String name;
   decode_type_t protocol = decode_type_t::UNKNOWN;
+  int16_t model = -1;
   uint16_t bits = 0;
   uint64_t value = 0;
   bool hasAcMeta = false;
+  bool metaComplete = false;
   bool power = true;
   float degrees = 26.0f;
   String mode = "cool";
   String fan = "auto";
+  bool turbo = false;
+  bool quiet = false;
+  bool sleep = false;
+  bool swingV = false;
+  bool swingH = false;
+  bool filter = false;
   uint16_t freqKhz = 38;
   uint16_t rawLen = 0;
   uint16_t raw[kMaxRawPulses] = {};
@@ -219,6 +228,10 @@ struct SelfTestReport {
   String receivedAcDescription;
 };
 
+bool snapshotToCommonState(const CaptureSnapshot &snapshot, stdAc::state_t *state, const stdAc::state_t *prev);
+AcRequest requestFromCommonStateRaw(const stdAc::state_t &state);
+AcRequest requestFromCommonState(const stdAc::state_t &state);
+
 enum class PendingAction : uint8_t {
   None,
   SendAc,
@@ -288,6 +301,7 @@ String lastAutoSentFan = "";
 bool lastAutoSentTurbo = false;
 bool lastAutoSentQuiet = false;
 bool lastAutoSentSleep = false;
+uint32_t lastAutoModeChangeMs = 0;
 char pendingAcSource[12] = "manual";
 char pendingAcAction[16] = "send";
 float pendingAcTarget = NAN;
@@ -329,6 +343,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       --history-temp: #d94a3a;
       --history-temp-soft: rgba(217, 74, 58, 0.16);
       --history-humidity: #2f80ed;
+      --history-target: #805ad5;
       --danger: #a93f32;
       --control: rgba(118, 105, 82, 0.13);
       --shadow: 8px 8px 18px rgba(111, 91, 58, 0.18), -8px -8px 18px rgba(255, 255, 255, 0.58);
@@ -351,6 +366,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       --history-temp: #ef5b4f;
       --history-temp-soft: rgba(239, 91, 79, 0.16);
       --history-humidity: #2f80ed;
+      --history-target: #7b61ff;
       --danger: #ec5f67;
       --control: rgba(47, 128, 237, 0.08);
       --shadow: 0 22px 46px rgba(78, 101, 142, 0.20), 0 2px 7px rgba(255, 255, 255, 0.80);
@@ -1072,6 +1088,16 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     .curve-fill { fill: rgba(23, 105, 224, 0.12); }
     .history-line { fill: none; stroke: var(--history-temp); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
     .history-humidity-line { fill: none; stroke: var(--history-humidity); stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+    .history-target-line { fill: none; stroke: var(--history-target); stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 6 5; }
+    .history-target-label { fill: var(--history-target); font-size: 10px; font-weight: 800; paint-order: stroke; stroke: var(--panel-strong); stroke-width: 3px; stroke-linejoin: round; }
+    .history-mode-band { opacity: .18; pointer-events: none; }
+    .history-mode-band.mode-cool { fill: #2f80ed; }
+    .history-mode-band.mode-heat { fill: #ef5b4f; }
+    .history-mode-band.mode-dry { fill: #8b5cf6; }
+    .history-mode-band.mode-auto { fill: #0a8f72; }
+    .history-mode-band.mode-fan { fill: #06a0b5; }
+    .history-mode-band.mode-off { fill: #8d8476; }
+    .history-mode-label { font-size: 10px; font-weight: 800; fill: var(--muted); paint-order: stroke; stroke: var(--panel-strong); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
     .history-fill { fill: var(--history-temp-soft); }
     .history-stage { position: relative; cursor: grab; }
     .history-stage.dragging { cursor: grabbing; }
@@ -1085,6 +1111,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     .history-hover-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; pointer-events: none; }
     .history-hover-dot { fill: var(--panel-strong); stroke: var(--history-temp); stroke-width: 2; pointer-events: none; }
     .history-hover-dot.humidity { stroke: var(--history-humidity); }
+    .history-hover-dot.target { stroke: var(--history-target); stroke-dasharray: 3 2; }
     .history-tooltip {
       position: absolute;
       z-index: 3;
@@ -1331,10 +1358,11 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     <div class="actions">
       <button onclick="sendAc()">立即发送</button>
       <button class="secondary" type="button" onclick="selfTestAc()">自发自收校验</button>
+      <button class="secondary" type="button" onclick="applyCaptureState()">套用最近捕获</button>
       <button class="secondary" type="button" onclick="compareAcCode()">对比实体遥控编码</button>
     </div>
     <div class="label" id="selfTestResult">校验会实际发射一次当前红外指令。</div>
-    <div class="label" id="codeCompareResult">编码对比前，请先用实体遥控器发送同一组合，让控制器捕获基准编码。</div>
+    <div class="label" id="codeCompareResult">编码对比前，请先用实体遥控器发送同一组合；“套用最近捕获”不会发射红外，“编码对比”会实际发射一次。</div>
     <div class="preset-panel">
       <div class="preset-head">
         <div>
@@ -1371,6 +1399,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
         </div>
         <div class="actions">
           <button onclick="saveLearned()">保存最近捕获</button>
+          <button class="secondary" type="button" onclick="applyCaptureState()">套用到空调控制</button>
         </div>
       </div>
     </div>
@@ -1658,7 +1687,7 @@ const curveView = {w:720, h:280, l:44, r:14, t:10, b:30};
 const historyView = {w:720, h:260, l:50, r:52, t:18, b:38};
 let tempHistoryRefreshInFlight = false;
 let controlLogRefreshInFlight = false;
-const tempHistoryState = {samples:[], events:[], usesEpoch:false, eventsUseEpoch:false, start:null, end:null, minTemp:0, maxTemp:0, followLatest:true, hover:null};
+const tempHistoryState = {samples:[], events:[], modeEvents:[], usesEpoch:false, eventsUseEpoch:false, modeEventsUseEpoch:false, start:null, end:null, minTemp:0, maxTemp:0, followLatest:true, hover:null};
 const controlLogState = {logs:[], usesEpoch:false, capacity:0, persistent:false};
 const tempHistoryPinch = {active:false, startDistance:0, startSpan:0, anchor:0, ratio:0.5};
 const tempHistoryDrag = {active:false, pointerId:null, startClientX:0, startSvgX:0, startStart:0, startEnd:0, moved:false};
@@ -2011,13 +2040,209 @@ function historySvgPointFromClient(clientX, clientY=0){
 function historySvgXFromClient(clientX){
   return historySvgPointFromClient(clientX, 0).x;
 }
+function historyDateForMinute(minute, usesEpoch, latestMinute){
+  if (usesEpoch) return new Date(minute * 60000);
+  return new Date(Date.now() - Math.max(0, latestMinute - minute) * 60000);
+}
+function historyMinuteFromDate(date, usesEpoch, latestMinute){
+  if (usesEpoch) return date.getTime() / 60000;
+  return latestMinute - (Date.now() - date.getTime()) / 60000;
+}
 function formatHistoryLabel(minute, usesEpoch, latestMinute){
-  if (usesEpoch) {
-    const d = new Date(minute * 60000);
-    return `${String(d.getMonth() + 1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  }
-  const d = new Date(Date.now() - Math.max(0, latestMinute - minute) * 60000);
+  const d = historyDateForMinute(minute, usesEpoch, latestMinute);
   return `${String(d.getMonth() + 1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function normalizeCurveForHistory(raw, duration){
+  const range = curveRange();
+  duration = clamp(Math.round(Number(duration) || 480), 30, 1439);
+  let points = Array.isArray(raw) ? raw.map(p => ({
+    minute: roundMinute(p.minute ?? 0),
+    temp: roundTemp(p.temp ?? 26)
+  })).filter(p => Number.isFinite(p.minute) && Number.isFinite(p.temp)) : [];
+  if (!points.length) points = [{minute:0, temp:26}, {minute:duration, temp:26}];
+  if (points.length === 1) points = [{minute:0, temp:points[0].temp}, {minute:duration, temp:points[0].temp}];
+  points.sort((a, b) => a.minute - b.minute);
+  if (points.length > maxCurvePoints) {
+    points = [points[0], ...points.slice(1, maxCurvePoints - 1), points[points.length - 1]];
+  }
+  points = points.map(p => ({
+    minute: clamp(roundMinute(p.minute), 0, duration),
+    temp: clamp(roundTemp(p.temp), range.min, range.max)
+  }));
+  points[0].minute = 0;
+  points[points.length - 1].minute = duration;
+  let previous = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    const remaining = points.length - 1 - i;
+    const minMinute = previous + 5;
+    const maxMinute = duration - remaining * 5;
+    points[i].minute = clamp(points[i].minute, minMinute, Math.max(minMinute, maxMinute));
+    previous = points[i].minute;
+  }
+  return points.map(p => ({minute: Math.round(p.minute), temp: Number(p.temp.toFixed(1))}));
+}
+function sleepCurveHistoryConfig(){
+  const cfg = state.config || {};
+  const startMinute = $('sleepStart')
+    ? hhmmToMin($('sleepStart').value)
+    : Number(cfg.sleepStartMinute ?? 23 * 60) % 1440;
+  let duration = NaN;
+  if ($('sleepStart') && $('sleepDuration')) {
+    duration = minutesBetween(hhmmToMin($('sleepStart').value), hhmmToMin($('sleepDuration').value), true);
+  }
+  if (!Number.isFinite(duration) || duration <= 0) duration = Number(cfg.sleepDurationMinute);
+  duration = clamp(Math.round(Number(duration) || 480), 30, 1439);
+  let rawCurve = null;
+  try {
+    if ($('curve')) rawCurve = JSON.parse($('curve').value);
+  } catch(e) {
+    rawCurve = null;
+  }
+  if (!Array.isArray(rawCurve)) rawCurve = cfg.curve;
+  return {startMinute, duration, points: normalizeCurveForHistory(rawCurve, duration)};
+}
+function targetTempFromCurvePoints(points, elapsedMinute){
+  if (!points || !points.length) return null;
+  const elapsed = Number(elapsedMinute);
+  if (!Number.isFinite(elapsed)) return null;
+  if (elapsed <= points[0].minute) return points[0].temp;
+  for (let i = 1; i < points.length; i++) {
+    if (elapsed <= points[i].minute) {
+      const a = points[i - 1];
+      const b = points[i];
+      const ratio = (elapsed - a.minute) / Math.max(1, b.minute - a.minute);
+      return a.temp + (b.temp - a.temp) * ratio;
+    }
+  }
+  return points[points.length - 1].temp;
+}
+function sleepTargetForHistoryMinute(minute, usesEpoch, latestMinute, cfg=null){
+  cfg = cfg || sleepCurveHistoryConfig();
+  const d = historyDateForMinute(minute, usesEpoch, latestMinute);
+  const localMinute = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+  const elapsed = (localMinute + 1440 - cfg.startMinute) % 1440;
+  if (elapsed > cfg.duration) return null;
+  return targetTempFromCurvePoints(cfg.points, elapsed);
+}
+function historySleepTargetPoints(samples, latestMinute){
+  const cfg = sleepCurveHistoryConfig();
+  return (samples || []).map(p => ({
+    minute: p.minute,
+    target: sleepTargetForHistoryMinute(p.minute, tempHistoryState.usesEpoch, latestMinute, cfg)
+  }));
+}
+function historySleepTargetLabels(start, end, minTemp, maxTemp, latestMinute){
+  const cfg = sleepCurveHistoryConfig();
+  const dayStart = historyDateForMinute(start, tempHistoryState.usesEpoch, latestMinute);
+  const dayEnd = historyDateForMinute(end, tempHistoryState.usesEpoch, latestMinute);
+  dayStart.setHours(0, 0, 0, 0);
+  dayEnd.setHours(0, 0, 0, 0);
+  dayStart.setDate(dayStart.getDate() - 1);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  const labels = [];
+  let lastX = -999;
+  for (const day = new Date(dayStart); day <= dayEnd; day.setDate(day.getDate() + 1)) {
+    cfg.points.forEach(point => {
+      const d = new Date(day);
+      d.setMinutes(cfg.startMinute + point.minute, 0, 0);
+      const minute = historyMinuteFromDate(d, tempHistoryState.usesEpoch, latestMinute);
+      if (minute < start || minute > end) return;
+      const x = historyX(minute, start, end);
+      if (Math.abs(x - lastX) < 30) return;
+      lastX = x;
+      const y = clamp(historyY(point.temp, minTemp, maxTemp) - 8, historyView.t + 10, historyView.h - historyView.b - 8);
+      labels.push(`<circle class="history-hover-dot target" cx="${x.toFixed(1)}" cy="${historyY(point.temp, minTemp, maxTemp).toFixed(1)}" r="3.6"></circle><text class="history-target-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle">${point.temp.toFixed(1)}℃</text>`);
+    });
+  }
+  return labels.join('');
+}
+function normalizeControlEvents(data){
+  const events = Array.isArray(data?.events) ? data.events : [];
+  return events.map(e => ({
+    minute:Number(e.minute),
+    source:e.source,
+    action:e.action,
+    mode:e.mode,
+    fan:e.fan,
+    setpoint:Number(e.setpoint),
+    target:Number(e.target),
+    room:Number(e.room),
+    power:!!e.power,
+    turbo:!!e.turbo,
+    quiet:!!e.quiet,
+    sleep:!!e.sleep
+  })).filter(e => Number.isFinite(e.minute));
+}
+function usableModeEvent(event){
+  const action = String(event?.action || '').toLowerCase();
+  return event && Number.isFinite(event.minute) && !action.includes('failed');
+}
+function modeBandClass(event){
+  if (!event?.power) return 'mode-off';
+  const mode = String(event.mode || '').toLowerCase();
+  if (mode === 'heat') return 'mode-heat';
+  if (mode === 'dry') return 'mode-dry';
+  if (mode === 'auto' || mode === 'smart') return 'mode-auto';
+  if (mode === 'fan') return 'mode-fan';
+  return 'mode-cool';
+}
+function modeBandText(event){
+  if (!event?.power) return '关机';
+  return modeText[event.mode] || event.mode || '制冷';
+}
+function historyModeSummary(event){
+  if (!event) return '';
+  if (!event.power) return '模式底纹：关机';
+  const mode = modeText[event.mode] || event.mode || '--';
+  const fan = fanText[event.fan] || event.fan || '--';
+  const setpoint = Number(event.setpoint);
+  const setpointText = Number.isFinite(setpoint) ? ` · 设定 ${setpoint.toFixed(1)}℃` : '';
+  return `模式底纹：${mode} / ${fan}${setpointText}`;
+}
+function historyActiveModeEvent(minute){
+  if (tempHistoryState.modeEventsUseEpoch !== tempHistoryState.usesEpoch) return null;
+  let active = null;
+  tempHistoryState.modeEvents.forEach(e => {
+    if (!usableModeEvent(e) || e.minute > minute) return;
+    if (!active || e.minute >= active.minute) active = e;
+  });
+  return active;
+}
+function historyModeBands(start, end){
+  if (tempHistoryState.modeEventsUseEpoch !== tempHistoryState.usesEpoch) return '';
+  const events = tempHistoryState.modeEvents
+    .filter(e => usableModeEvent(e) && e.minute <= end)
+    .sort((a, b) => a.minute - b.minute);
+  let active = null;
+  let cursor = start;
+  const parts = [];
+  events.forEach(e => {
+    if (e.minute < start) {
+      active = e;
+      return;
+    }
+    if (active && e.minute > cursor) {
+      const x1 = historyX(cursor, start, end);
+      const x2 = historyX(e.minute, start, end);
+      const w = Math.max(0, x2 - x1);
+      if (w >= 2) {
+        const label = w > 46 ? `<text class="history-mode-label" x="${(x1 + w / 2).toFixed(1)}" y="${(historyView.t + 16).toFixed(1)}" text-anchor="middle">${modeBandText(active)}</text>` : '';
+        parts.push(`<rect class="history-mode-band ${modeBandClass(active)}" x="${x1.toFixed(1)}" y="${historyView.t}" width="${w.toFixed(1)}" height="${(historyView.h - historyView.t - historyView.b).toFixed(1)}"></rect>${label}`);
+      }
+    }
+    active = e;
+    cursor = Math.max(start, e.minute);
+  });
+  if (active && cursor < end) {
+    const x1 = historyX(cursor, start, end);
+    const x2 = historyX(end, start, end);
+    const w = Math.max(0, x2 - x1);
+    if (w >= 2) {
+      const label = w > 46 ? `<text class="history-mode-label" x="${(x1 + w / 2).toFixed(1)}" y="${(historyView.t + 16).toFixed(1)}" text-anchor="middle">${modeBandText(active)}</text>` : '';
+      parts.push(`<rect class="history-mode-band ${modeBandClass(active)}" x="${x1.toFixed(1)}" y="${historyView.t}" width="${w.toFixed(1)}" height="${(historyView.h - historyView.t - historyView.b).toFixed(1)}"></rect>${label}`);
+    }
+  }
+  return parts.join('');
 }
 function normalizeHistorySamples(data){
   if (!data) return [];
@@ -2082,7 +2307,9 @@ function renderTempHistory(data=null){
   const end = tempHistoryState.end;
   const visible = samples.filter(p => p.minute >= start && p.minute <= end);
   const viewSamples = visible.length ? visible : samples.slice(-1);
-  const temps = viewSamples.map(p => p.temp);
+  const targetPoints = historySleepTargetPoints(visible, latest);
+  const targetTemps = targetPoints.map(p => Number(p.target)).filter(Number.isFinite);
+  const temps = viewSamples.map(p => p.temp).concat(targetTemps);
   const humidities = viewSamples.map(p => Number(p.humidity)).filter(Number.isFinite);
   let minTemp = Math.floor(Math.min(...temps) - 1);
   let maxTemp = Math.ceil(Math.max(...temps) + 1);
@@ -2098,6 +2325,9 @@ function renderTempHistory(data=null){
   const baseY = historyView.h - historyView.b;
   const path = linePath(visible, 'temp', minTemp, maxTemp);
   const humidityPath = linePath(visible, 'humidity', minHumidity, maxHumidity);
+  const targetPath = linePath(targetPoints, 'target', minTemp, maxTemp);
+  const targetLabels = historySleepTargetLabels(start, end, minTemp, maxTemp, latest);
+  const modeBands = historyModeBands(start, end);
   const fill = path ? `${path} L ${historyX(visible[visible.length - 1].minute, start, end).toFixed(1)} ${baseY} L ${historyX(visible[0].minute, start, end).toFixed(1)} ${baseY} Z` : '';
   const xTicks = [0, 0.25, 0.5, 0.75, 1].map(v => Math.round(start + (end - start) * v));
   const yTicks = [];
@@ -2114,10 +2344,14 @@ function renderTempHistory(data=null){
     const hx = historyX(tempHistoryState.hover.minute, start, end).toFixed(1);
     const hy = historyY(tempHistoryState.hover.temp, minTemp, maxTemp).toFixed(1);
     const hh = Number(tempHistoryState.hover.humidity);
+    const ht = Number(tempHistoryState.hover.target);
     const humidityDot = Number.isFinite(hh)
       ? `<circle class="history-hover-dot humidity" cx="${hx}" cy="${historyY(hh, minHumidity, maxHumidity).toFixed(1)}" r="4.5"></circle>`
       : '';
-    hover = `<line class="history-hover-line" x1="${hx}" y1="${historyView.t}" x2="${hx}" y2="${baseY}"></line><circle class="history-hover-dot" cx="${hx}" cy="${hy}" r="5"></circle>${humidityDot}`;
+    const targetDot = Number.isFinite(ht)
+      ? `<circle class="history-hover-dot target" cx="${hx}" cy="${historyY(ht, minTemp, maxTemp).toFixed(1)}" r="4.5"></circle>`
+      : '';
+    hover = `<line class="history-hover-line" x1="${hx}" y1="${historyView.t}" x2="${hx}" y2="${baseY}"></line><circle class="history-hover-dot" cx="${hx}" cy="${hy}" r="5"></circle>${humidityDot}${targetDot}`;
   }
   let lastNode = '';
   if (last.minute >= start && last.minute <= end) {
@@ -2131,14 +2365,14 @@ function renderTempHistory(data=null){
       return `<line class="history-event-line" x1="${x}" y1="${historyView.t}" x2="${x}" y2="${baseY}"></line><circle class="history-event-dot" cx="${x}" cy="${historyView.t + 10}" r="4"></circle>`;
     }).join('')
     : '';
-  const legend = `<text class="curve-label" x="${historyView.l}" y="12" style="fill:var(--history-temp)">室温 ℃</text><text class="curve-label" x="${historyView.w - historyView.r}" y="12" text-anchor="end" style="fill:var(--history-humidity)">湿度 %</text>`;
-  svg.innerHTML = `${grid}${legend}<line class="curve-axis" x1="${historyView.l}" y1="${baseY}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.l}" y1="${historyView.t}" x2="${historyView.l}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.w - historyView.r}" y1="${historyView.t}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line>${fill ? `<path class="history-fill" d="${fill}"></path><path class="history-line" d="${path}"></path>` : ''}${humidityPath ? `<path class="history-humidity-line" d="${humidityPath}"></path>` : ''}${eventMarkers}${lastNode}${hover}`;
+  const legend = `<text class="curve-label" x="${historyView.l}" y="12" style="fill:var(--history-temp)">室温 ℃</text><text class="curve-label" x="${historyView.l + 76}" y="12" style="fill:var(--history-target)">睡眠目标 ℃</text><text class="curve-label" x="${historyView.w - historyView.r}" y="12" text-anchor="end" style="fill:var(--history-humidity)">湿度 %</text>`;
+  svg.innerHTML = `${modeBands}${grid}${legend}<line class="curve-axis" x1="${historyView.l}" y1="${baseY}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.l}" y1="${historyView.t}" x2="${historyView.l}" y2="${baseY}"></line><line class="curve-axis" x1="${historyView.w - historyView.r}" y1="${historyView.t}" x2="${historyView.w - historyView.r}" y2="${baseY}"></line>${fill ? `<path class="history-fill" d="${fill}"></path><path class="history-line" d="${path}"></path>` : ''}${humidityPath ? `<path class="history-humidity-line" d="${humidityPath}"></path>` : ''}${targetPath ? `<path class="history-target-line" d="${targetPath}"></path>${targetLabels}` : ''}${eventMarkers}${lastNode}${hover}`;
   if ($('tempHistoryBadge')) $('tempHistoryBadge').textContent = `${samples.length} / 4320 点`;
   if ($('tempHistoryInfo')) {
     const spanHours = Math.max(1, Math.round((end - start) / 60));
     const lastHumidity = Number(last.humidity);
     const humidityText = Number.isFinite(lastHumidity) ? ` / ${lastHumidity.toFixed(0)}%` : '';
-    $('tempHistoryInfo').textContent = `最近 ${last.temp.toFixed(1)} ℃${humidityText}，当前视窗约 ${spanHours} 小时；滚轮缩放，拖动平移，悬停查看时间、温度和湿度。`;
+    $('tempHistoryInfo').textContent = `最近 ${last.temp.toFixed(1)} ℃${humidityText}，当前视窗约 ${spanHours} 小时；红色室温，蓝色湿度，紫色虚线睡眠目标，底纹表示空调运行模式。`;
   }
 }
 async function refreshTempHistory(){
@@ -2154,6 +2388,11 @@ async function refreshTempHistory(){
       controlLogState.usesEpoch = !!eventData.usesEpoch;
       controlLogState.capacity = Number(eventData.capacity || 0);
       controlLogState.persistent = !!eventData.persistent;
+    } catch(e) {}
+    try {
+      const modeData = await fetchJsonSafe('/api/control-events', {}, '控制事件', 1, 30000);
+      tempHistoryState.modeEvents = normalizeControlEvents(modeData);
+      tempHistoryState.modeEventsUseEpoch = !!modeData.usesEpoch;
     } catch(e) {}
     renderTempHistory(history);
   } catch(e) {
@@ -2175,7 +2414,11 @@ function historyPointFromClient(clientX, clientY=0){
     const dist = Math.abs(p.minute - minute);
     if (dist < bestDist) { bestDist = dist; best = p; }
   });
-  return best;
+  if (!best) return null;
+  const latest = tempHistoryState.samples[tempHistoryState.samples.length - 1]?.minute || best.minute;
+  return Object.assign({}, best, {
+    target: sleepTargetForHistoryMinute(best.minute, tempHistoryState.usesEpoch, latest)
+  });
 }
 function historyPointFromEvent(evt){
   return historyPointFromClient(evt.clientX, evt.clientY);
@@ -2218,7 +2461,11 @@ function showTempHistoryTooltipAt(clientX, clientY){
   const event = nearestHistoryEvent(point.minute);
   const humidity = Number(point.humidity);
   const humidityText = Number.isFinite(humidity) ? ` · ${humidity.toFixed(0)}%` : '';
-  tip.innerHTML = `<strong>${point.temp.toFixed(1)} ℃${humidityText}</strong><span>${formatHistoryLabel(point.minute, tempHistoryState.usesEpoch, tempHistoryState.samples[tempHistoryState.samples.length - 1]?.minute || point.minute)}</span>${historyEventText(event)}`;
+  const target = Number(point.target);
+  const targetText = Number.isFinite(target) ? `<span>睡眠目标 ${target.toFixed(1)} ℃</span>` : '';
+  const modeTextLine = historyModeSummary(historyActiveModeEvent(point.minute));
+  const modeTextHtml = modeTextLine ? `<span>${modeTextLine}</span>` : '';
+  tip.innerHTML = `<strong>${point.temp.toFixed(1)} ℃${humidityText}</strong><span>${formatHistoryLabel(point.minute, tempHistoryState.usesEpoch, tempHistoryState.samples[tempHistoryState.samples.length - 1]?.minute || point.minute)}</span>${targetText}${modeTextHtml}${historyEventText(event)}`;
 }
 function showTempHistoryTooltip(evt){
   if (tempHistoryDrag.active) return;
@@ -2516,6 +2763,7 @@ function renderCurve(points=null){
   updateCurveAdjuster(points);
   const point = points[selectedCurveIndex];
   $('curvePointInfo').textContent = `选中：入睡后 ${point.minute} 分钟，目标 ${point.temp.toFixed(1)} ℃`;
+  if ($('tempHistorySvg')) renderTempHistory();
 }
 function renderCurveList(points){
   const start = hhmmToMin($('sleepStart').value);
@@ -2742,10 +2990,18 @@ function captureText(capture){
     '码值：' + (capture.value || '--'),
     '状态字节：' + (capture.stateHex || '--'),
     'Raw 长度：' + (capture.rawLen ?? '--'),
+    '解析状态：' + formatAcRequestBrief(capture.request),
     '空调解析：' + (capture.acDescription || '未识别为空调协议'),
     '摘要：' + (capture.summary || '--')
   ];
   return lines.join('\n');
+}
+function formatAcRequestBrief(req){
+  if (!req) return '--';
+  const mode = modeText[req.mode] || req.mode || '--';
+  const fan = fanText[req.fan] || req.fan || '--';
+  const specials = enabledSpecialNames(req);
+  return `${req.power ? '开机' : '关机'} / ${mode} / ${Number(req.degrees).toFixed(1)} ℃ / ${fan}${specials.length ? ' / ' + specials.join('、') : ''}`;
 }
 function renderLearned(items){
   if (!items || !items.length) {
@@ -3361,7 +3617,8 @@ async function selfTestAc(){
 function formatCaptureBrief(c){
   if (!c || !c.available) return '无编码';
   const core = c.stateHex || c.value || '--';
-  return `${c.protocol || '--'} / ${c.bits || 0} bits / ${core}`;
+  const decoded = c.request ? ` / ${formatAcRequestBrief(c.request)}` : '';
+  return `${c.protocol || '--'} / ${c.bits || 0} bits / ${core}${decoded}`;
 }
 function formatCodeCompareResult(data){
   if (!data) return '未获得编码对比结果';
@@ -3395,6 +3652,23 @@ async function compareAcCode(){
   } catch(e) {
     if (box) box.textContent = e.message || '编码对比失败';
     msg(e.message || '编码对比失败', true);
+  }
+}
+async function applyCaptureState(){
+  try {
+    msg('正在套用最近捕获状态...');
+    const data = await fetchJsonSafe('/api/apply-capture-state', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:'{}'
+    }, '套用捕获状态', 0, 12000);
+    clearDirty(['protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag']);
+    const text = data && data.request ? `已套用：${formatAcRequestBrief(data.request)}` : '最近捕获状态已套用';
+    if ($('codeCompareResult')) $('codeCompareResult').textContent = text + '。现在可再次执行编码对比。';
+    msg(text);
+    await refresh(true);
+  } catch(e) {
+    msg(e.message || '套用最近捕获失败', true);
   }
 }
 async function createPresetFromCurrent(){
@@ -3457,7 +3731,7 @@ async function deletePreset(id){
 }
 async function saveLearned(){
   try {
-    await post('/api/learn', {name:$('learnName').value, freqKhz:Number($('learnFreq').value), power:$('learnPower').value==='true', mode:$('learnMode').value, degrees:Number($('learnDegrees').value), fan:$('learnFan').value}, '最近捕获已保存', ['learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan']);
+    await post('/api/learn', Object.assign(remoteCommandPayload(), {name:$('learnName').value, freqKhz:Number($('learnFreq').value), power:$('learnPower').value==='true', mode:$('learnMode').value, degrees:Number($('learnDegrees').value), fan:$('learnFan').value}), '最近捕获已保存', ['learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan']);
   } catch(e) { msg(e.message || '保存失败', true); }
 }
 async function sendLearned(id){
@@ -5368,13 +5642,21 @@ void saveLearnedLibrary() {
     item["id"] = learned[i].id;
     item["name"] = learned[i].name;
     item["protocol"] = typeToString(learned[i].protocol);
+    item["model"] = learned[i].model;
     item["bits"] = learned[i].bits;
     item["value"] = uint64ToHexString(learned[i].value);
     item["hasAcMeta"] = learned[i].hasAcMeta;
+    item["metaComplete"] = learned[i].metaComplete;
     item["power"] = learned[i].power;
     item["degrees"] = learned[i].degrees;
     item["mode"] = learned[i].mode;
     item["fan"] = learned[i].fan;
+    item["turbo"] = learned[i].turbo;
+    item["quiet"] = learned[i].quiet;
+    item["sleep"] = learned[i].sleep;
+    item["swingV"] = learned[i].swingV;
+    item["swingH"] = learned[i].swingH;
+    item["filter"] = learned[i].filter;
     item["freqKhz"] = learned[i].freqKhz;
     item["acDescription"] = learned[i].acDescription;
     JsonArray raw = item["raw"].to<JsonArray>();
@@ -5412,13 +5694,21 @@ void loadLearnedLibrary() {
     cmd.id = item["id"] | static_cast<uint8_t>(learnedCount + 1);
     cmd.name = item["name"] | "";
     cmd.protocol = strToDecodeType((item["protocol"] | "UNKNOWN"));
+    cmd.model = item["model"] | -1;
     cmd.bits = item["bits"] | 0;
     cmd.value = parseHex64(item["value"] | "0");
     cmd.hasAcMeta = item["hasAcMeta"] | false;
+    cmd.metaComplete = item["metaComplete"] | false;
     cmd.power = item["power"] | true;
     cmd.degrees = item["degrees"] | 26.0f;
     cmd.mode = item["mode"] | "cool";
     cmd.fan = item["fan"] | "auto";
+    cmd.turbo = item["turbo"] | false;
+    cmd.quiet = item["quiet"] | false;
+    cmd.sleep = item["sleep"] | false;
+    cmd.swingV = item["swingV"] | false;
+    cmd.swingH = item["swingH"] | false;
+    cmd.filter = item["filter"] | false;
     cmd.freqKhz = item["freqKhz"] | 38;
     cmd.acDescription = item["acDescription"] | "";
     cmd.rawLen = 0;
@@ -5524,6 +5814,27 @@ void copyCaptureToLearned(LearnedCommand &cmd) {
   cmd.acDescription = lastCapture.acDescription;
   cmd.rawLen = lastCapture.rawLen;
   for (uint16_t i = 0; i < cmd.rawLen; i++) cmd.raw[i] = lastCapture.raw[i];
+}
+
+bool applyCaptureMetaToLearned(LearnedCommand &cmd) {
+  stdAc::state_t decodedState;
+  if (!snapshotToCommonState(lastCapture, &decodedState, nullptr)) return false;
+  AcRequest request = requestFromCommonStateRaw(decodedState);
+  cmd.protocol = lastCapture.protocol;
+  cmd.model = decodedState.model;
+  cmd.hasAcMeta = true;
+  cmd.metaComplete = true;
+  cmd.power = request.power;
+  cmd.mode = request.mode;
+  cmd.fan = request.fan;
+  cmd.degrees = request.degrees;
+  cmd.turbo = request.turbo;
+  cmd.quiet = request.quiet;
+  cmd.sleep = request.sleep;
+  cmd.swingV = request.swingV;
+  cmd.swingH = request.swingH;
+  cmd.filter = request.filter;
+  return true;
 }
 
 void swapLearnedCommands(uint8_t a, uint8_t b) {
@@ -6229,20 +6540,32 @@ bool sendLearnedNow(uint8_t id) {
   return true;
 }
 
-int findSemanticLearnedCommand(const AcRequest &request) {
-  int best = -1;
-  float bestScore = 999.0f;
-  for (uint8_t i = 0; i < learnedCount; i++) {
-    if (!learned[i].hasAcMeta || learned[i].rawLen == 0) continue;
-    if (learned[i].power != request.power) continue;
-    if (learned[i].mode != request.mode) continue;
-    float score = fabs(learned[i].degrees - request.degrees);
-    if (score < bestScore) {
-      best = i;
-      bestScore = score;
-    }
+bool learnedCommandMatchesRequest(const LearnedCommand &cmd, const AcRequest &request) {
+  if (!cmd.hasAcMeta || cmd.rawLen == 0) return false;
+  if (cmd.protocol != decode_type_t::UNKNOWN && config.acProtocol != decode_type_t::UNKNOWN &&
+      cmd.protocol != config.acProtocol) {
+    return false;
   }
-  return best;
+  if (cmd.metaComplete && cmd.model >= 0 && config.acModel >= 0 && cmd.model != config.acModel) return false;
+  if (cmd.power != request.power) return false;
+  if (!request.power) return true;
+  if (cmd.mode != request.mode) return false;
+  if (fabs(cmd.degrees - request.degrees) > 0.25f) return false;
+  if (cmd.fan != request.fan) return false;
+  if (!cmd.metaComplete) return true;
+  return cmd.turbo == request.turbo &&
+         cmd.quiet == request.quiet &&
+         cmd.sleep == request.sleep &&
+         cmd.swingV == request.swingV &&
+         cmd.swingH == request.swingH &&
+         cmd.filter == request.filter;
+}
+
+int findSemanticLearnedCommand(const AcRequest &request) {
+  for (uint8_t i = 0; i < learnedCount; i++) {
+    if (learnedCommandMatchesRequest(learned[i], request)) return i;
+  }
+  return -1;
 }
 
 void prepareAcState(const AcRequest &request) {
@@ -6323,6 +6646,191 @@ bool stateSwingVActive(stdAc::swingv_t swing) {
 
 bool stateSwingHActive(stdAc::swingh_t swing) {
   return swing != stdAc::swingh_t::kOff;
+}
+
+String modeFromCommonState(stdAc::opmode_t mode) {
+  switch (mode) {
+    case stdAc::opmode_t::kCool:
+      return "cool";
+    case stdAc::opmode_t::kHeat:
+      return "heat";
+    case stdAc::opmode_t::kDry:
+      return "dry";
+    case stdAc::opmode_t::kFan:
+      return "fan";
+    case stdAc::opmode_t::kAuto:
+    case stdAc::opmode_t::kOff:
+    default:
+      return "auto";
+  }
+}
+
+String fanFromCommonState(stdAc::fanspeed_t fan) {
+  switch (fan) {
+    case stdAc::fanspeed_t::kMin:
+      return "min";
+    case stdAc::fanspeed_t::kLow:
+      return "low";
+    case stdAc::fanspeed_t::kMedium:
+      return "medium";
+    case stdAc::fanspeed_t::kHigh:
+      return "high";
+    case stdAc::fanspeed_t::kMax:
+    case stdAc::fanspeed_t::kMediumHigh:
+      return "max";
+    case stdAc::fanspeed_t::kAuto:
+    default:
+      return "auto";
+  }
+}
+
+AcRequest requestFromCommonStateRaw(const stdAc::state_t &state) {
+  AcRequest request;
+  request.power = state.power && state.mode != stdAc::opmode_t::kOff;
+  request.mode = modeFromCommonState(state.mode);
+  request.fan = fanFromCommonState(state.fanspeed);
+  request.degrees = clampFloat(state.degrees, config.minSetpoint, config.maxSetpoint);
+  request.turbo = state.turbo;
+  request.quiet = state.quiet;
+  request.sleep = state.sleep >= 0;
+  request.swingV = stateSwingVActive(state.swingv);
+  request.swingH = stateSwingHActive(state.swingh);
+  request.filter = state.filter;
+  return request;
+}
+
+AcRequest requestFromCommonState(const stdAc::state_t &state) {
+  AcRequest request = requestFromCommonStateRaw(state);
+  return normalizedAcRequest(request);
+}
+
+AcRequest requestFromLearnedCommand(const LearnedCommand &cmd) {
+  AcRequest request;
+  request.power = cmd.power;
+  request.mode = cmd.mode;
+  request.fan = cmd.fan;
+  request.degrees = cmd.degrees;
+  request.turbo = cmd.turbo;
+  request.quiet = cmd.quiet;
+  request.sleep = cmd.sleep;
+  request.swingV = cmd.swingV;
+  request.swingH = cmd.swingH;
+  request.filter = cmd.filter;
+  return normalizedAcRequest(request);
+}
+
+void valueToStateBytes(uint64_t value, uint8_t *out, uint16_t len) {
+  for (uint16_t i = 0; i < len; i++) out[i] = static_cast<uint8_t>((value >> (8 * i)) & 0xFF);
+}
+
+bool greeStateToCommon(const uint8_t *stateBytes, stdAc::state_t *state) {
+  if (stateBytes == nullptr || state == nullptr) return false;
+  CaptureSnapshot snapshot;
+  snapshot.available = true;
+  snapshot.protocol = decode_type_t::GREE;
+  snapshot.bits = kGreeBits;
+  snapshot.stateLen = kGreeStateLength;
+  memcpy(snapshot.state, stateBytes, kGreeStateLength);
+  return snapshotToCommonState(snapshot, state, nullptr);
+}
+
+uint8_t greeCalcChecksum(const uint8_t *stateBytes, uint16_t len = kGreeStateLength) {
+  if (stateBytes == nullptr || len == 0) return 0;
+  uint8_t sum = 10;
+  for (uint8_t i = 0; i < 4 && i < len - 1; i++) sum += stateBytes[i] & 0x0F;
+  for (uint8_t i = 4; i < len - 1; i++) sum += stateBytes[i] >> 4;
+  return sum & 0x0F;
+}
+
+void fixGreeChecksum(uint8_t *stateBytes, uint16_t len = kGreeStateLength) {
+  if (stateBytes == nullptr || len == 0) return;
+  stateBytes[len - 1] = (stateBytes[len - 1] & 0x0F) | (greeCalcChecksum(stateBytes, len) << 4);
+}
+
+bool shouldPatchGreeYbofb(int16_t model) {
+  return model == static_cast<int16_t>(gree_ac_remote_model_t::YBOFB);
+}
+
+bool currentUsesPatchedGreeYbofb() {
+  return config.acProtocol == decode_type_t::GREE && shouldPatchGreeYbofb(config.acModel);
+}
+
+void applyGreeYbofbHiddenTemplate(const AcRequest &request, uint8_t *stateBytes) {
+  if (stateBytes == nullptr) return;
+  stateBytes[5] = request.sleep ? 0x42 : 0x41;
+  fixGreeChecksum(stateBytes);
+}
+
+bool generateGreeStateBytes(const AcRequest &request, int16_t model, uint8_t *out) {
+  if (out == nullptr) return false;
+  gree_ac_remote_model_t greeModel = gree_ac_remote_model_t::YAW1F;
+  if (model == static_cast<int16_t>(gree_ac_remote_model_t::YBOFB)) {
+    greeModel = gree_ac_remote_model_t::YBOFB;
+  } else if (model == static_cast<int16_t>(gree_ac_remote_model_t::YX1FSF)) {
+    greeModel = gree_ac_remote_model_t::YX1FSF;
+  }
+  IRGreeAC gree(kIrTxPin, greeModel);
+  gree.setModel(greeModel);
+  gree.setPower(request.power);
+  gree.setMode(gree.convertMode(parseMode(request.mode)));
+  gree.setTemp(request.degrees);
+  gree.setFan(gree.convertFan(parseFan(request.fan)));
+  gree.setSwingVertical(request.swingV, request.swingV ? kGreeSwingAuto : kGreeSwingLastPos);
+  gree.setSwingHorizontal(request.swingH ? kGreeSwingHAuto : kGreeSwingHOff);
+  gree.setIFeel(false);
+  gree.setLight(false);
+  gree.setTurbo(request.turbo);
+  gree.setEcono(false);
+  gree.setXFan(false);
+  gree.setSleep(request.sleep);
+  memcpy(out, gree.getRaw(), kGreeStateLength);
+  if (shouldPatchGreeYbofb(model)) applyGreeYbofbHiddenTemplate(request, out);
+  return true;
+}
+
+bool sendGreeStateBytesNow(const AcRequest &request, stdAc::state_t *expectedState = nullptr) {
+  uint8_t stateBytes[kGreeStateLength] = {};
+  if (!generateGreeStateBytes(request, config.acModel, stateBytes)) return false;
+  if (expectedState != nullptr) greeStateToCommon(stateBytes, expectedState);
+  rawSender.sendGree(stateBytes, kGreeStateLength, kGreeDefaultRepeat);
+  return true;
+}
+
+bool greeHiddenOnlyDiff(const uint8_t *reference, const uint8_t *generated) {
+  bool hasDiff = false;
+  for (uint8_t i = 0; i < kGreeStateLength; i++) {
+    if (reference[i] == generated[i]) continue;
+    hasDiff = true;
+    if (i != 5 && i != 7) return false;
+  }
+  return hasDiff;
+}
+
+uint8_t countByteDiffs(const uint8_t *reference, const uint8_t *generated, uint16_t len) {
+  uint8_t count = 0;
+  for (uint16_t i = 0; i < len; i++) {
+    if (reference[i] != generated[i]) count++;
+  }
+  return count;
+}
+
+String byteDiffsJson(const uint8_t *reference, const uint8_t *generated, uint16_t len) {
+  String out = "[";
+  bool first = true;
+  for (uint16_t i = 0; i < len; i++) {
+    if (reference[i] == generated[i]) continue;
+    if (!first) out += ",";
+    out += "{\"index\":";
+    out += String(i + 1);
+    out += ",\"reference\":";
+    out += jsonString(bytesToHexString(reference + i, 1));
+    out += ",\"generated\":";
+    out += jsonString(bytesToHexString(generated + i, 1));
+    out += "}";
+    first = false;
+  }
+  out += "]";
+  return out;
 }
 
 void appendSelfTestMismatch(SelfTestReport &report, const String &text) {
@@ -6411,6 +6919,46 @@ String selfTestStateJson(const stdAc::state_t &state) {
   return out;
 }
 
+String acRequestJson(const AcRequest &request) {
+  String out;
+  out.reserve(220);
+  out += "{\"power\":";
+  out += request.power ? "true" : "false";
+  out += ",\"mode\":";
+  out += jsonString(request.mode);
+  out += ",\"degrees\":";
+  out += String(request.degrees, 1);
+  out += ",\"fan\":";
+  out += jsonString(request.fan);
+  out += ",\"turbo\":";
+  out += request.turbo ? "true" : "false";
+  out += ",\"quiet\":";
+  out += request.quiet ? "true" : "false";
+  out += ",\"sleep\":";
+  out += request.sleep ? "true" : "false";
+  out += ",\"swingV\":";
+  out += request.swingV ? "true" : "false";
+  out += ",\"swingH\":";
+  out += request.swingH ? "true" : "false";
+  out += ",\"filter\":";
+  out += request.filter ? "true" : "false";
+  out += "}";
+  return out;
+}
+
+void addAcRequestToJson(JsonObject obj, const AcRequest &request) {
+  obj["power"] = request.power;
+  obj["mode"] = request.mode;
+  obj["degrees"] = request.degrees;
+  obj["fan"] = request.fan;
+  obj["turbo"] = request.turbo;
+  obj["quiet"] = request.quiet;
+  obj["sleep"] = request.sleep;
+  obj["swingV"] = request.swingV;
+  obj["swingH"] = request.swingH;
+  obj["filter"] = request.filter;
+}
+
 String selfTestReportJson(const SelfTestReport &report) {
   String out;
   out.reserve(1200);
@@ -6473,7 +7021,9 @@ bool snapshotToCommonState(const CaptureSnapshot &snapshot, stdAc::state_t *stat
 
 String captureSnapshotJson(const CaptureSnapshot &snapshot) {
   String out;
-  out.reserve(420);
+  out.reserve(900);
+  stdAc::state_t decodedState;
+  bool decoded = snapshotToCommonState(snapshot, &decodedState, nullptr);
   out += "{\"available\":";
   out += snapshot.available ? "true" : "false";
   out += ",\"protocol\":";
@@ -6490,6 +7040,10 @@ String captureSnapshotJson(const CaptureSnapshot &snapshot) {
   out += String(snapshot.rawLen);
   out += ",\"acDescription\":";
   out += jsonString(snapshot.acDescription);
+  out += ",\"decoded\":";
+  out += decoded ? selfTestStateJson(decodedState) : String("null");
+  out += ",\"request\":";
+  out += decoded ? acRequestJson(requestFromCommonState(decodedState)) : String("null");
   out += "}";
   return out;
 }
@@ -6599,9 +7153,13 @@ SelfTestReport runAcSelfTest(const AcRequest &request, uint32_t timeoutMs = 3500
   irrecv.resume();
   delay(80);
 
-  prepareAcState(report.expectedRequest);
-  report.expectedState = ac.next;
-  report.sent = ac.sendAc();
+  if (currentUsesPatchedGreeYbofb()) {
+    report.sent = sendGreeStateBytesNow(report.expectedRequest, &report.expectedState);
+  } else {
+    prepareAcState(report.expectedRequest);
+    report.expectedState = ac.next;
+    report.sent = ac.sendAc();
+  }
   if (!report.sent) {
     irBusy = false;
     report.message = "红外发送失败，未执行接收校验";
@@ -6655,14 +7213,33 @@ SelfTestReport runAcSelfTest(const AcRequest &request, uint32_t timeoutMs = 3500
 bool sendAcNow(const AcRequest &request, const char *source = "manual", const char *action = "send",
                float target = NAN, float setpoint = NAN) {
   AcRequest normalized = normalizedAcRequest(request);
+  int exactLearnedIdx = findSemanticLearnedCommand(normalized);
+  if (exactLearnedIdx >= 0) {
+    bool ok = sendLearnedNow(learned[exactLearnedIdx].id);
+    if (ok) {
+      rememberAcState(normalized);
+      if (normalized.power) lastSentSetpoint = learned[exactLearnedIdx].degrees;
+    }
+    addControlEvent(source, ok ? "sent_raw" : "failed", normalized, target, isnan(setpoint) ? learned[exactLearnedIdx].degrees : setpoint);
+    addDecisionLog(ok ? "sent_raw" : "failed", source, lastActionResult.c_str(), roomTempC, target,
+                   isnan(setpoint) ? learned[exactLearnedIdx].degrees : setpoint);
+    return ok;
+  }
+
   if (IRac::isProtocolSupported(config.acProtocol)) {
     irBusy = true;
     irrecv.disableIRIn();
-    prepareAcState(normalized);
-    bool ok = ac.sendAc();
+    bool ok = false;
+    if (currentUsesPatchedGreeYbofb()) {
+      ok = sendGreeStateBytesNow(normalized);
+    } else {
+      prepareAcState(normalized);
+      ok = ac.sendAc();
+    }
     irrecv.enableIRIn();
     irBusy = false;
-    lastActionResult = ok ? "sent AC " + typeToString(config.acProtocol) +
+    lastActionResult = ok ? String(currentUsesPatchedGreeYbofb() ? "sent patched AC " : "sent AC ") +
+                                typeToString(config.acProtocol) +
                                 " power=" + String(normalized.power ? "on" : "off") +
                                 " mode=" + normalized.mode +
                                 " temp=" + String(normalized.degrees, 1) +
@@ -6681,19 +7258,6 @@ bool sendAcNow(const AcRequest &request, const char *source = "manual", const ch
     addControlEvent(source, ok ? action : "failed", normalized, target, isnan(setpoint) ? normalized.degrees : setpoint);
     addDecisionLog(ok ? "sent" : "failed", source, lastActionResult.c_str(), roomTempC, target,
                    isnan(setpoint) ? normalized.degrees : setpoint);
-    return ok;
-  }
-
-  int idx = findSemanticLearnedCommand(normalized);
-  if (idx >= 0) {
-    bool ok = sendLearnedNow(learned[idx].id);
-    if (ok) {
-      rememberAcState(normalized);
-      if (normalized.power) lastSentSetpoint = learned[idx].degrees;
-    }
-    addControlEvent(source, ok ? action : "failed", normalized, target, isnan(setpoint) ? learned[idx].degrees : setpoint);
-    addDecisionLog(ok ? "sent_raw" : "failed", source, lastActionResult.c_str(), roomTempC, target,
-                   isnan(setpoint) ? learned[idx].degrees : setpoint);
     return ok;
   }
 
@@ -6790,10 +7354,30 @@ bool isHeatCoolMode(const String &mode) {
 
 String smartModeForTarget(float target) {
   if (isnan(roomTempC)) return "auto";
-  float switchBand = max(config.deadband, 0.35f);
-  if (target - roomTempC > switchBand) return "heat";
-  if (roomTempC - target > switchBand) return "cool";
-  if (isHeatCoolMode(lastAutoSentMode)) return lastAutoSentMode;
+  float enterBand = max(config.deadband, 0.35f);
+  float reverseBand = max(enterBand + 0.85f, 1.15f);
+  float forceReverseBand = max(reverseBand + 0.75f, 1.9f);
+  uint32_t intervalHoldMs = static_cast<uint32_t>(config.controlIntervalSec) * 4UL * 1000UL;
+  uint32_t minHoldMs = intervalHoldMs > 12UL * 60UL * 1000UL ? intervalHoldMs : 12UL * 60UL * 1000UL;
+  bool holdTimeOk = lastAutoModeChangeMs == 0 || millis() - lastAutoModeChangeMs >= minHoldMs;
+  String heldMode = isHeatCoolMode(lastAutoSentMode)
+                        ? lastAutoSentMode
+                        : (config.remotePower && isHeatCoolMode(config.remoteMode) ? config.remoteMode : "");
+
+  if (heldMode == "cool") {
+    float tooCold = target - roomTempC;
+    if (tooCold > forceReverseBand || (tooCold > reverseBand && holdTimeOk)) return "heat";
+    return "cool";
+  }
+  if (heldMode == "heat") {
+    float tooHot = roomTempC - target;
+    if (tooHot > forceReverseBand || (tooHot > reverseBand && holdTimeOk)) return "cool";
+    return "heat";
+  }
+
+  if (target - roomTempC > enterBand) return "heat";
+  if (roomTempC - target > enterBand) return "cool";
+  if (isHeatCoolMode(heldMode)) return heldMode;
   return "auto";
 }
 
@@ -6875,6 +7459,7 @@ void resetAutoSendMemory() {
   lastAutoSentTurbo = false;
   lastAutoSentQuiet = false;
   lastAutoSentSleep = false;
+  lastAutoModeChangeMs = 0;
 }
 
 bool sameAutoRequestShape(const AcRequest &request) {
@@ -6886,6 +7471,7 @@ bool sameAutoRequestShape(const AcRequest &request) {
 }
 
 void rememberAutoRequestShape(const AcRequest &request) {
+  if (request.mode != lastAutoSentMode) lastAutoModeChangeMs = millis();
   lastAutoSentMode = request.mode;
   lastAutoSentFan = request.fan;
   lastAutoSentTurbo = request.turbo;
@@ -7210,6 +7796,14 @@ void addLiveToJson(JsonDocument &doc) {
     cap["summary"] = lastCapture.summary;
     cap["acDescription"] = lastCapture.acDescription;
     cap["ageMs"] = millis() - lastCapture.capturedAtMs;
+    stdAc::state_t decodedState;
+    bool decoded = snapshotToCommonState(lastCapture, &decodedState, nullptr);
+    cap["decodedAvailable"] = decoded;
+    if (decoded) {
+      JsonObject request = cap["request"].to<JsonObject>();
+      addAcRequestToJson(request, requestFromCommonState(decodedState));
+      cap["decodedModel"] = decodedState.model;
+    }
   }
 }
 
@@ -7403,10 +7997,20 @@ void handleStatus() {
     item["name"] = learned[i].name;
     item["protocol"] = typeToString(learned[i].protocol);
     item["rawLen"] = learned[i].rawLen;
-    item["meta"] = learned[i].hasAcMeta
-                       ? String(learned[i].power ? "on " : "off ") + learned[i].mode + " " +
-                             String(learned[i].degrees, 1) + "C " + learned[i].fan
-                       : "";
+    if (learned[i].hasAcMeta) {
+      String meta = String(learned[i].power ? "on " : "off ") + learned[i].mode + " " +
+                    String(learned[i].degrees, 1) + "C " + learned[i].fan;
+      if (learned[i].turbo) meta += " turbo";
+      if (learned[i].quiet) meta += " quiet";
+      if (learned[i].sleep) meta += " sleep";
+      if (learned[i].swingV) meta += " swingV";
+      if (learned[i].swingH) meta += " swingH";
+      if (learned[i].filter) meta += " filter";
+      if (learned[i].model >= 0) meta += " model=" + String(learned[i].model);
+      item["meta"] = meta;
+    } else {
+      item["meta"] = "";
+    }
   }
 
   JsonArray presetArr = doc["presets"].to<JsonArray>();
@@ -7432,6 +8036,125 @@ void handleStatus() {
 
   String out;
   serializeJson(doc, out);
+  sendJsonResponse(200, out);
+}
+
+void handleLearnedMatchReport() {
+  const int16_t models[] = {
+      static_cast<int16_t>(gree_ac_remote_model_t::YAW1F),
+      static_cast<int16_t>(gree_ac_remote_model_t::YBOFB),
+      static_cast<int16_t>(gree_ac_remote_model_t::YX1FSF),
+  };
+  uint16_t strictCount[3] = {};
+  uint16_t semanticCount[3] = {};
+  uint16_t hiddenOnlyCount[3] = {};
+  uint16_t diffSum[3] = {};
+  uint16_t analyzable = 0;
+
+  String items;
+  items.reserve(9000);
+  items += "[";
+  bool firstItem = true;
+  for (uint8_t i = 0; i < learnedCount; i++) {
+    if (learned[i].protocol != decode_type_t::GREE || learned[i].bits != kGreeBits || learned[i].value == 0) continue;
+    uint8_t reference[kGreeStateLength] = {};
+    valueToStateBytes(learned[i].value, reference, kGreeStateLength);
+    stdAc::state_t referenceState;
+    bool referenceDecoded = greeStateToCommon(reference, &referenceState);
+    AcRequest request = referenceDecoded ? requestFromCommonStateRaw(referenceState) : requestFromLearnedCommand(learned[i]);
+    analyzable++;
+
+    if (!firstItem) items += ",";
+    items += "{\"id\":";
+    items += String(learned[i].id);
+    items += ",\"name\":";
+    items += jsonString(learned[i].name);
+    items += ",\"reference\":";
+    items += jsonString(bytesToHexString(reference, kGreeStateLength));
+    items += ",\"decoded\":";
+    items += referenceDecoded ? selfTestStateJson(referenceState) : String("null");
+    items += ",\"request\":";
+    items += acRequestJson(request);
+    items += ",\"models\":[";
+
+    bool firstModel = true;
+    for (uint8_t m = 0; m < 3; m++) {
+      uint8_t generated[kGreeStateLength] = {};
+      bool generatedOk = generateGreeStateBytes(request, models[m], generated);
+      stdAc::state_t generatedState;
+      bool generatedDecoded = generatedOk && greeStateToCommon(generated, &generatedState);
+      String semanticMismatches;
+      bool semanticOk = referenceDecoded && generatedDecoded &&
+                        commonStatesSemanticallyEqual(referenceState, generatedState, semanticMismatches);
+      bool strictOk = generatedOk && memcmp(reference, generated, kGreeStateLength) == 0;
+      bool hiddenOnly = semanticOk && !strictOk && greeHiddenOnlyDiff(reference, generated);
+      uint8_t diffs = generatedOk ? countByteDiffs(reference, generated, kGreeStateLength) : kGreeStateLength;
+
+      if (strictOk) strictCount[m]++;
+      if (semanticOk) semanticCount[m]++;
+      if (hiddenOnly) hiddenOnlyCount[m]++;
+      diffSum[m] += diffs;
+
+      if (!firstModel) items += ",";
+      items += "{\"model\":";
+      items += String(models[m]);
+      items += ",\"generated\":";
+      items += jsonString(generatedOk ? bytesToHexString(generated, kGreeStateLength) : "");
+      items += ",\"strictOk\":";
+      items += strictOk ? "true" : "false";
+      items += ",\"semanticOk\":";
+      items += semanticOk ? "true" : "false";
+      items += ",\"hiddenOnly\":";
+      items += hiddenOnly ? "true" : "false";
+      items += ",\"diffCount\":";
+      items += String(diffs);
+      items += ",\"diffs\":";
+      items += generatedOk ? byteDiffsJson(reference, generated, kGreeStateLength) : String("[]");
+      items += ",\"semanticMismatches\":";
+      items += codeCompareMismatchesJson(semanticMismatches);
+      items += "}";
+      firstModel = false;
+    }
+    items += "]}";
+    firstItem = false;
+  }
+  items += "]";
+
+  int best = 0;
+  for (uint8_t m = 1; m < 3; m++) {
+    if (semanticCount[m] > semanticCount[best] ||
+        (semanticCount[m] == semanticCount[best] && strictCount[m] > strictCount[best]) ||
+        (semanticCount[m] == semanticCount[best] && strictCount[m] == strictCount[best] && diffSum[m] < diffSum[best])) {
+      best = m;
+    }
+  }
+
+  String out;
+  out.reserve(items.length() + 1200);
+  out += "{\"total\":";
+  out += String(learnedCount);
+  out += ",\"analyzable\":";
+  out += String(analyzable);
+  out += ",\"bestModel\":";
+  out += String(models[best]);
+  out += ",\"models\":[";
+  for (uint8_t m = 0; m < 3; m++) {
+    if (m > 0) out += ",";
+    out += "{\"model\":";
+    out += String(models[m]);
+    out += ",\"strict\":";
+    out += String(strictCount[m]);
+    out += ",\"semantic\":";
+    out += String(semanticCount[m]);
+    out += ",\"hiddenOnly\":";
+    out += String(hiddenOnlyCount[m]);
+    out += ",\"diffSum\":";
+    out += String(diffSum[m]);
+    out += "}";
+  }
+  out += "],\"items\":";
+  out += items;
+  out += "}";
   sendJsonResponse(200, out);
 }
 
@@ -7787,6 +8510,38 @@ void handleSelfTestAcPost() {
   sendJsonResponse(200, selfTestReportJson(report));
 }
 
+void handleApplyCaptureStatePost() {
+  if (!lastCapture.available) {
+    sendError(409, "请先用实体遥控器发送一次，让控制器捕获到空调状态");
+    return;
+  }
+  stdAc::state_t decodedState;
+  if (!snapshotToCommonState(lastCapture, &decodedState, nullptr)) {
+    sendError(422, "最近捕获无法解析为空调状态，不能自动套用");
+    return;
+  }
+  AcRequest request = requestFromCommonState(decodedState);
+  if (lastCapture.protocol != decode_type_t::UNKNOWN) config.acProtocol = lastCapture.protocol;
+  if (decodedState.model >= 0) config.acModel = decodedState.model;
+  rememberAcState(request);
+  syncConfigToActiveProfile();
+  saveConfig();
+
+  String out;
+  out.reserve(520);
+  out += "{\"ok\":true,\"protocol\":";
+  out += jsonString(typeToString(config.acProtocol));
+  out += ",\"model\":";
+  out += String(config.acModel);
+  out += ",\"request\":";
+  out += acRequestJson(request);
+  out += ",\"capture\":";
+  out += captureSnapshotJson(lastCapture);
+  out += "}";
+  addDecisionLog("capture_applied", "manual", "已把最近实体遥控捕获套用到当前空调方案", roomTempC, NAN, request.degrees);
+  sendJsonResponse(200, out);
+}
+
 String acProfilesJson() {
   ensureAcProfiles();
   String out;
@@ -8102,12 +8857,21 @@ void handleLearnPost() {
   const char *postedName = doc["name"] | "";
   cmd.name = strlen(postedName) ? String(postedName) : "command " + String(cmd.id);
   cmd.freqKhz = doc["freqKhz"] | 38;
-  cmd.hasAcMeta = true;
-  cmd.power = doc["power"] | true;
-  cmd.mode = doc["mode"] | "cool";
-  cmd.fan = doc["fan"] | "auto";
-  cmd.degrees = doc["degrees"] | 26.0f;
   copyCaptureToLearned(cmd);
+  if (!applyCaptureMetaToLearned(cmd)) {
+    cmd.hasAcMeta = true;
+    cmd.metaComplete = false;
+    cmd.power = doc["power"] | true;
+    cmd.mode = doc["mode"] | "cool";
+    cmd.fan = doc["fan"] | "auto";
+    cmd.degrees = doc["degrees"] | 26.0f;
+    cmd.turbo = doc["turbo"] | false;
+    cmd.quiet = doc["quiet"] | false;
+    cmd.sleep = doc["sleep"] | false;
+    cmd.swingV = doc["swingV"] | false;
+    cmd.swingH = doc["swingH"] | false;
+    cmd.filter = doc["filter"] | false;
+  }
   learnedCount++;
   saveLearnedLibrary();
   sendOk("capture saved");
@@ -8134,6 +8898,12 @@ void handleUpdateLearnedPost() {
   if (doc["mode"].is<const char *>()) cmd.mode = doc["mode"] | cmd.mode;
   if (doc["fan"].is<const char *>()) cmd.fan = doc["fan"] | cmd.fan;
   if (doc["degrees"].is<float>() || doc["degrees"].is<int>()) cmd.degrees = doc["degrees"] | cmd.degrees;
+  if (doc["turbo"].is<bool>()) cmd.turbo = doc["turbo"] | cmd.turbo;
+  if (doc["quiet"].is<bool>()) cmd.quiet = doc["quiet"] | cmd.quiet;
+  if (doc["sleep"].is<bool>()) cmd.sleep = doc["sleep"] | cmd.sleep;
+  if (doc["swingV"].is<bool>()) cmd.swingV = doc["swingV"] | cmd.swingV;
+  if (doc["swingH"].is<bool>()) cmd.swingH = doc["swingH"] | cmd.swingH;
+  if (doc["filter"].is<bool>()) cmd.filter = doc["filter"] | cmd.filter;
   cmd.hasAcMeta = doc["hasAcMeta"] | cmd.hasAcMeta;
 
   bool replaceFromCapture = doc["replaceFromCapture"] | false;
@@ -8143,6 +8913,7 @@ void handleUpdateLearnedPost() {
       return;
     }
     copyCaptureToLearned(cmd);
+    applyCaptureMetaToLearned(cmd);
   }
 
   saveLearnedLibrary();
@@ -8455,6 +9226,7 @@ void setupRoutes() {
   server.on("/remote/", HTTP_GET, []() { server.send_P(200, "text/html; charset=utf-8", kRemoteHtml); });
   server.on("/api/live", HTTP_GET, handleLive);
   server.on("/api/status", HTTP_GET, handleStatus);
+  server.on("/api/learned-match-report", HTTP_GET, handleLearnedMatchReport);
   server.on("/api/temp-history", HTTP_GET, handleTempHistory);
   server.on("/api/control-events", HTTP_GET, handleControlEvents);
   server.on("/api/control-log", HTTP_GET, handleControlLog);
@@ -8468,6 +9240,7 @@ void setupRoutes() {
   server.on("/api/ota", HTTP_POST, handleOtaFinish, handleOtaUpload);
   server.on("/api/send-ac", HTTP_POST, handleSendAcPost);
   server.on("/api/self-test-ac", HTTP_POST, handleSelfTestAcPost);
+  server.on("/api/apply-capture-state", HTTP_POST, handleApplyCaptureStatePost);
   server.on("/api/compare-ac-code", HTTP_POST, handleCompareAcCodePost);
   server.on("/api/ac-profiles", HTTP_GET, handleAcProfilesGet);
   server.on("/api/ac-profile/create", HTTP_POST, handleAcProfileCreatePost);
@@ -8490,6 +9263,10 @@ void setupRoutes() {
     const HTTPMethod method = server.method();
     if (method == HTTP_GET && uri == "/api/status") {
       handleStatus();
+      return;
+    }
+    if (method == HTTP_GET && uri == "/api/learned-match-report") {
+      handleLearnedMatchReport();
       return;
     }
     if (method == HTTP_GET && uri == "/api/live") {
@@ -8550,6 +9327,10 @@ void setupRoutes() {
     }
     if (method == HTTP_POST && uri == "/api/self-test-ac") {
       handleSelfTestAcPost();
+      return;
+    }
+    if (method == HTTP_POST && uri == "/api/apply-capture-state") {
+      handleApplyCaptureStatePost();
       return;
     }
     if (method == HTTP_POST && uri == "/api/compare-ac-code") {
