@@ -27,12 +27,35 @@ struct CurvePoint {
   float temp;
 };
 
+struct SleepCurveProfile {
+  String autoMode = "cool";
+  String curveControlMode = "staged";
+  String curveEndAction = "hold";
+  uint16_t quietSwitchMinute = 90;
+  uint16_t sleepStartMinute = 23 * 60;
+  uint16_t sleepDurationMinute = 8 * 60;
+  uint16_t controlIntervalSec = 600;
+  float deadband = 0.4f;
+  float autoSendDelta = 0.5f;
+  bool curveHumidityEnabled = false;
+  uint32_t lastCurveEndPoweroffKey = 0;
+  uint8_t curveCount = 4;
+  CurvePoint curve[kMaxCurvePoints] = {
+      {0, 27.0f},
+      {90, 26.5f},
+      {300, 25.5f},
+      {480, 26.5f},
+  };
+};
+
 struct DeviceConfig {
   String staSsid = kDefaultWifiSsid;
   String staPassword = kDefaultWifiPassword;
   decode_type_t acProtocol = decode_type_t::UNKNOWN;
   int16_t acModel = 1;
   bool autoEnabled = false;
+  String weekendMode = "off";
+  SleepCurveProfile weekend;
   String autoMode = "cool";
   bool remotePower = true;
   String remoteMode = "cool";
@@ -317,6 +340,7 @@ String serialCommandBuffer;
 bool ntpConfigured = false;
 bool apStarted = false;
 bool sleepCurveWasActive = false;
+bool sleepCurveWasWeekendProfile = false;
 uint32_t lastAdaptiveSaveMs = 0;
 
 const char kIndexHtml[] PROGMEM = R"HTML(
@@ -1104,7 +1128,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     #tempHistorySvg {
       display: block;
       width: 100%;
-      height: 260px;
+      height: clamp(320px, 28vw, 430px);
       user-select: none;
       touch-action: none;
     }
@@ -1276,7 +1300,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       .curve-toolbar { display: grid; }
       .curve-buttons { min-width: 0; width: 100%; }
       #curveSvg { height: 240px; }
-      #tempHistorySvg { height: 220px; }
+      #tempHistorySvg { height: 300px; }
       .curve-node circle { r: 14px; }
       .curve-step-grid { grid-template-columns: 1fr; }
       .curve-stepper { grid-template-columns: 64px minmax(0, 1fr) 64px; }
@@ -1421,6 +1445,8 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     </div>
     <div class="form-grid">
       <label>自动控制<select id="autoEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
+      <label>正在编辑<select id="curveProfile"><option value="weekday">工作日参数</option><option value="weekend">周末参数</option></select></label>
+      <label>周末模式<select id="weekendMode"><option value="off">关闭</option><option value="single">单休（周日）</option><option value="double">双休（周六周日）</option></select></label>
       <label>自动模式<select id="autoMode"><option value="smart">智能判定</option><option value="cool">制冷</option><option value="auto">空调自动</option><option value="dry">除湿</option><option value="heat">制热</option><option value="fan">送风</option></select></label>
       <label>曲线除湿<select id="curveHumidityEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
       <label>开始时间 HH:MM<input id="sleepStart" value="23:00" inputmode="numeric"></label>
@@ -1682,9 +1708,10 @@ let refreshInFlight = false;
 let liveRefreshInFlight = false;
 const $ = id => document.getElementById(id);
 const dirty = new Set();
-const guardedIds = ['staSsid','staPassword','acProfileName','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan','autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve','sensorTempOffset','sensorHumidityOffset','humidityControlEnabled','targetHumidity','humidityDeadband','humidityTargetTemp','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'];
+const guardedIds = ['staSsid','staPassword','acProfileName','protocol','model','power','mode','degrees','fan','specialMode','swingV','swingH','filterFlag','learnName','learnFreq','learnPower','learnMode','learnDegrees','learnFan','autoEnabled','weekendMode','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve','sensorTempOffset','sensorHumidityOffset','humidityControlEnabled','targetHumidity','humidityDeadband','humidityTargetTemp','predictiveSkipEnabled','adaptiveControlEnabled','closedLoopFastGain','closedLoopQuietGain','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter'];
 const curveView = {w:720, h:280, l:44, r:14, t:10, b:30};
 const historyView = {w:720, h:260, l:50, r:52, t:18, b:38};
+const historyBaseView = {w:720, h:260};
 let tempHistoryRefreshInFlight = false;
 let controlLogRefreshInFlight = false;
 const tempHistoryState = {samples:[], events:[], modeEvents:[], usesEpoch:false, eventsUseEpoch:false, modeEventsUseEpoch:false, start:null, end:null, minTemp:0, maxTemp:0, followLatest:true, hover:null};
@@ -1695,6 +1722,8 @@ let curveRenderRange = null;
 let curveAutoSaveTimer = 0;
 let curveAutoSaveInFlight = false;
 let curveAutoSavePending = false;
+let activeCurveProfile = 'weekday';
+const curveProfileDrafts = {weekday:null, weekend:null};
 let remoteStateSaveTimer = 0;
 const openPresetSchedules = new Set();
 let apiQueue = Promise.resolve();
@@ -1792,7 +1821,7 @@ function ensureCurveStrategyControls(){
 const segmentedSelectIds = [
   'power','mode','fan','specialMode','swingV','swingH','filterFlag',
   'learnPower','learnMode','learnFan',
-  'autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled',
+  'autoEnabled','curveProfile','weekendMode','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled',
   'humidityControlEnabled','predictiveSkipEnabled','adaptiveControlEnabled','capTurbo','capQuiet','capSleep','capSwingV','capSwingH','capFilter',
   'controlLogSourceFilter','controlLogTypeFilter'
 ];
@@ -1823,7 +1852,7 @@ function enhanceSegmentedControls(){
       btn.textContent = opt.label;
       btn.addEventListener('click', () => {
         select.value = opt.value;
-        if (!id.startsWith('controlLog')) dirty.add(id);
+        if (id !== 'curveProfile' && !id.startsWith('controlLog')) dirty.add(id);
         select.dispatchEvent(new Event('input', {bubbles:true}));
         select.dispatchEvent(new Event('change', {bubbles:true}));
         syncSegmentedControl(id);
@@ -1948,6 +1977,82 @@ function minutesBetween(startMinute, endMinute, fullDayIfSame=false){
   const diff = (Number(endMinute || 0) + 1440 - Number(startMinute || 0)) % 1440;
   return diff === 0 && fullDayIfSame ? 1439 : diff;
 }
+const curveProfileFieldIds = ['autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve'];
+function curveProfileFieldsDirty(){
+  return curveProfileFieldIds.some(id => dirty.has(id));
+}
+function curveProfilePayloadFromConfig(profile){
+  const cfg = state.config || {};
+  const src = profile === 'weekend' ? (cfg.weekend || {}) : cfg;
+  const fallback = cfg.curve || [{minute:0, temp:26}, {minute:480, temp:26}];
+  return {
+    autoMode: src.autoMode || 'cool',
+    curveControlMode: src.curveControlMode || 'staged',
+    curveEndAction: src.curveEndAction || 'hold',
+    curveHumidityEnabled: !!src.curveHumidityEnabled,
+    quietSwitchMinute: Number(src.quietSwitchMinute ?? 90),
+    sleepStartMinute: Number(src.sleepStartMinute ?? 23 * 60) % 1440,
+    sleepDurationMinute: clamp(Math.round(Number(src.sleepDurationMinute ?? 480)), 30, 1439),
+    controlIntervalSec: Math.max(5, Number(src.controlIntervalSec ?? 600)),
+    deadband: Number(src.deadband ?? 0.4),
+    autoSendDelta: Number(src.autoSendDelta ?? 0.5),
+    curve: Array.isArray(src.curve) ? src.curve : fallback
+  };
+}
+function curveProfilePayloadFromUi(){
+  return {
+    autoMode: $('autoMode')?.value || 'cool',
+    curveControlMode: $('curveControlMode')?.value || 'staged',
+    curveEndAction: $('curveEndAction')?.value || 'hold',
+    curveHumidityEnabled: $('curveHumidityEnabled')?.value === 'true',
+    quietSwitchMinute: quietSwitchFromTimes(),
+    sleepStartMinute: hhmmToMin($('sleepStart')?.value || '23:00'),
+    sleepDurationMinute: curveDurationFromTimes(),
+    controlIntervalSec: Number($('controlInterval')?.value || 600),
+    deadband: Number($('deadband')?.value || 0.4),
+    autoSendDelta: Number($('autoSendDelta')?.value ?? 0.5),
+    curve: readCurvePoints() || []
+  };
+}
+function stashActiveCurveProfile(){
+  if (!$('autoMode')) return;
+  curveProfileDrafts[activeCurveProfile] = curveProfilePayloadFromUi();
+}
+function applyCurveProfilePayload(payload, force=true){
+  const start = Number(payload.sleepStartMinute ?? 23 * 60);
+  const duration = Number(payload.sleepDurationMinute ?? 480);
+  setValue('autoMode', payload.autoMode || 'cool', force);
+  setValue('curveControlMode', payload.curveControlMode || 'staged', force);
+  setValue('curveEndAction', payload.curveEndAction || 'hold', force);
+  setValue('curveHumidityEnabled', String(!!payload.curveHumidityEnabled), force);
+  setValue('sleepStart', minToHhmm(start), force);
+  setValue('quietSwitchMinute', minToHhmm(start + Number(payload.quietSwitchMinute ?? 90)), force);
+  setValue('sleepDuration', minToHhmm(start + duration), force);
+  setValue('controlInterval', payload.controlIntervalSec ?? 600, force);
+  setValue('deadband', payload.deadband ?? 0.4, force);
+  setValue('autoSendDelta', payload.autoSendDelta ?? 0.5, force);
+  setValue('curve', JSON.stringify(normalizeCurveForHistory(payload.curve || [], duration)), force);
+  renderCurve();
+}
+function loadCurveProfile(profile, force=true){
+  const next = profile === 'weekend' ? 'weekend' : 'weekday';
+  activeCurveProfile = next;
+  setValue('curveProfile', next, true);
+  const payload = curveProfileDrafts[next] || curveProfilePayloadFromConfig(next);
+  applyCurveProfilePayload(payload, force);
+}
+async function handleCurveProfileChange(){
+  const next = $('curveProfile')?.value === 'weekend' ? 'weekend' : 'weekday';
+  if (next === activeCurveProfile) return;
+  clearTimeout(curveAutoSaveTimer);
+  const shouldSaveCurrent = curveProfileFieldsDirty();
+  stashActiveCurveProfile();
+  if (shouldSaveCurrent) {
+    await saveCurve(true);
+  }
+  loadCurveProfile(next, true);
+  clearDirty(curveProfileFieldIds);
+}
 function curveDurationFromTimes(){
   return minutesBetween(hhmmToMin($('sleepStart').value), hhmmToMin($('sleepDuration').value), true);
 }
@@ -2001,11 +2106,29 @@ function filteredControlLogs(logs=controlLogState.logs){
     return true;
   });
 }
+function historyChartEvents(logs=tempHistoryState.events){
+  return filteredControlLogs(logs).filter(item => String(item?.action || '') !== 'skip_delta');
+}
+function chartNumber(value){
+  if (value === null || value === undefined || value === '') return NaN;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : NaN;
+}
+function syncHistoryViewBox(){
+  const svg = $('tempHistorySvg');
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+  const width = rect.width > 1 ? Math.round(rect.width) : historyBaseView.w;
+  const height = rect.height > 1 ? Math.round(rect.height) : historyBaseView.h;
+  historyView.w = width;
+  historyView.h = height;
+  svg.setAttribute('viewBox', `0 0 ${historyView.w} ${historyView.h}`);
+}
 function linePath(points, valueKey, minValue, maxValue){
   let path = '';
   let open = false;
   points.forEach(p => {
-    const value = Number(p[valueKey]);
+    const value = chartNumber(p[valueKey]);
     if (!Number.isFinite(value)) {
       open = false;
       return;
@@ -2023,6 +2146,7 @@ function historyTicks(min, max, count=5){
 }
 function historySvgPointFromClient(clientX, clientY=0){
   const svg = $('tempHistorySvg');
+  syncHistoryViewBox();
   if (!svg) return {x: historyView.l + (historyView.w - historyView.l - historyView.r) / 2, y: historyView.t};
   if (svg.createSVGPoint && svg.getScreenCTM()) {
     const point = svg.createSVGPoint();
@@ -2081,25 +2205,14 @@ function normalizeCurveForHistory(raw, duration){
   }
   return points.map(p => ({minute: Math.round(p.minute), temp: Number(p.temp.toFixed(1))}));
 }
-function sleepCurveHistoryConfig(){
+function sleepCurveHistoryConfig(profile='weekday'){
   const cfg = state.config || {};
-  const startMinute = $('sleepStart')
-    ? hhmmToMin($('sleepStart').value)
-    : Number(cfg.sleepStartMinute ?? 23 * 60) % 1440;
-  let duration = NaN;
-  if ($('sleepStart') && $('sleepDuration')) {
-    duration = minutesBetween(hhmmToMin($('sleepStart').value), hhmmToMin($('sleepDuration').value), true);
-  }
-  if (!Number.isFinite(duration) || duration <= 0) duration = Number(cfg.sleepDurationMinute);
+  const src = profile === 'weekend' ? (cfg.weekend || {}) : cfg;
+  const startMinute = Number(src.sleepStartMinute ?? 23 * 60) % 1440;
+  let duration = Number(src.sleepDurationMinute);
   duration = clamp(Math.round(Number(duration) || 480), 30, 1439);
-  let rawCurve = null;
-  try {
-    if ($('curve')) rawCurve = JSON.parse($('curve').value);
-  } catch(e) {
-    rawCurve = null;
-  }
-  if (!Array.isArray(rawCurve)) rawCurve = cfg.curve;
-  return {startMinute, duration, points: normalizeCurveForHistory(rawCurve, duration)};
+  const rawCurve = Array.isArray(src.curve) ? src.curve : cfg.curve;
+  return {profile, startMinute, duration, points: normalizeCurveForHistory(rawCurve, duration)};
 }
 function targetTempFromCurvePoints(points, elapsedMinute){
   if (!points || !points.length) return null;
@@ -2117,22 +2230,66 @@ function targetTempFromCurvePoints(points, elapsedMinute){
   return points[points.length - 1].temp;
 }
 function sleepTargetForHistoryMinute(minute, usesEpoch, latestMinute, cfg=null){
-  cfg = cfg || sleepCurveHistoryConfig();
+  if (!cfg) {
+    const selected = sleepCurveHistoryProfileAtMinute(minute, usesEpoch, latestMinute);
+    if (!selected) return null;
+    return selected.target;
+  }
   const d = historyDateForMinute(minute, usesEpoch, latestMinute);
   const localMinute = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
   const elapsed = (localMinute + 1440 - cfg.startMinute) % 1440;
   if (elapsed > cfg.duration) return null;
   return targetTempFromCurvePoints(cfg.points, elapsed);
 }
+function sleepCurveHistoryProfileElapsed(minute, usesEpoch, latestMinute, cfg){
+  const d = historyDateForMinute(minute, usesEpoch, latestMinute);
+  const localMinute = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+  const elapsed = (localMinute + 1440 - cfg.startMinute) % 1440;
+  return elapsed <= cfg.duration ? elapsed : null;
+}
+function sleepCurveHistoryWakeDay(minute, usesEpoch, latestMinute, cfg){
+  const d = historyDateForMinute(minute, usesEpoch, latestMinute);
+  const localMinute = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+  const startDay = new Date(d);
+  startDay.setHours(0, 0, 0, 0);
+  if (localMinute < cfg.startMinute) startDay.setDate(startDay.getDate() - 1);
+  const wake = new Date(startDay);
+  wake.setMinutes(cfg.startMinute + cfg.duration, 0, 0);
+  return wake.getDay();
+}
+function weekendModeMatchesHistoryDay(day){
+  const mode = state.config?.weekendMode || 'off';
+  if (mode === 'double') return day === 0 || day === 6;
+  if (mode === 'single') return day === 0;
+  return false;
+}
+function sleepCurveHistoryProfileAtMinute(minute, usesEpoch, latestMinute){
+  const weekendCfg = sleepCurveHistoryConfig('weekend');
+  if ((state.config?.weekendMode || 'off') !== 'off') {
+    const elapsed = sleepCurveHistoryProfileElapsed(minute, usesEpoch, latestMinute, weekendCfg);
+    if (elapsed !== null && weekendModeMatchesHistoryDay(sleepCurveHistoryWakeDay(minute, usesEpoch, latestMinute, weekendCfg))) {
+      return {profile:'weekend', cfg:weekendCfg, elapsed, target:targetTempFromCurvePoints(weekendCfg.points, elapsed)};
+    }
+  }
+  const weekdayCfg = sleepCurveHistoryConfig('weekday');
+  const elapsed = sleepCurveHistoryProfileElapsed(minute, usesEpoch, latestMinute, weekdayCfg);
+  if (elapsed !== null) {
+    const wakeDay = sleepCurveHistoryWakeDay(minute, usesEpoch, latestMinute, weekdayCfg);
+    if (!weekendModeMatchesHistoryDay(wakeDay)) {
+      return {profile:'weekday', cfg:weekdayCfg, elapsed, target:targetTempFromCurvePoints(weekdayCfg.points, elapsed)};
+    }
+  }
+  return null;
+}
 function historySleepTargetPoints(samples, latestMinute){
-  const cfg = sleepCurveHistoryConfig();
   return (samples || []).map(p => ({
     minute: p.minute,
-    target: sleepTargetForHistoryMinute(p.minute, tempHistoryState.usesEpoch, latestMinute, cfg)
+    target: historySleepTargetHiddenAt(p.minute)
+      ? null
+      : sleepTargetForHistoryMinute(p.minute, tempHistoryState.usesEpoch, latestMinute)
   }));
 }
 function historySleepTargetLabels(start, end, minTemp, maxTemp, latestMinute){
-  const cfg = sleepCurveHistoryConfig();
   const dayStart = historyDateForMinute(start, tempHistoryState.usesEpoch, latestMinute);
   const dayEnd = historyDateForMinute(end, tempHistoryState.usesEpoch, latestMinute);
   dayStart.setHours(0, 0, 0, 0);
@@ -2141,17 +2298,27 @@ function historySleepTargetLabels(start, end, minTemp, maxTemp, latestMinute){
   dayEnd.setDate(dayEnd.getDate() + 1);
   const labels = [];
   let lastX = -999;
+  const configs = [sleepCurveHistoryConfig('weekday')];
+  if ((state.config?.weekendMode || 'off') !== 'off') configs.push(sleepCurveHistoryConfig('weekend'));
   for (const day = new Date(dayStart); day <= dayEnd; day.setDate(day.getDate() + 1)) {
-    cfg.points.forEach(point => {
-      const d = new Date(day);
-      d.setMinutes(cfg.startMinute + point.minute, 0, 0);
-      const minute = historyMinuteFromDate(d, tempHistoryState.usesEpoch, latestMinute);
-      if (minute < start || minute > end) return;
-      const x = historyX(minute, start, end);
-      if (Math.abs(x - lastX) < 30) return;
-      lastX = x;
-      const y = clamp(historyY(point.temp, minTemp, maxTemp) - 8, historyView.t + 10, historyView.h - historyView.b - 8);
-      labels.push(`<circle class="history-hover-dot target" cx="${x.toFixed(1)}" cy="${historyY(point.temp, minTemp, maxTemp).toFixed(1)}" r="3.6"></circle><text class="history-target-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle">${point.temp.toFixed(1)}℃</text>`);
+    configs.forEach(cfg => {
+      const wake = new Date(day);
+      wake.setMinutes(cfg.startMinute + cfg.duration, 0, 0);
+      const weekendCycle = weekendModeMatchesHistoryDay(wake.getDay());
+      if (cfg.profile === 'weekend' && !weekendCycle) return;
+      if (cfg.profile === 'weekday' && weekendCycle) return;
+      cfg.points.forEach(point => {
+        const d = new Date(day);
+        d.setMinutes(cfg.startMinute + point.minute, 0, 0);
+        const minute = historyMinuteFromDate(d, tempHistoryState.usesEpoch, latestMinute);
+        if (minute < start || minute > end) return;
+        if (historySleepTargetHiddenAt(minute)) return;
+        const x = historyX(minute, start, end);
+        if (Math.abs(x - lastX) < 30) return;
+        lastX = x;
+        const y = clamp(historyY(point.temp, minTemp, maxTemp) - 8, historyView.t + 10, historyView.h - historyView.b - 8);
+        labels.push(`<circle class="history-hover-dot target" cx="${x.toFixed(1)}" cy="${historyY(point.temp, minTemp, maxTemp).toFixed(1)}" r="3.6"></circle><text class="history-target-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle">${point.temp.toFixed(1)}℃</text>`);
+      });
     });
   }
   return labels.join('');
@@ -2164,9 +2331,9 @@ function normalizeControlEvents(data){
     action:e.action,
     mode:e.mode,
     fan:e.fan,
-    setpoint:Number(e.setpoint),
-    target:Number(e.target),
-    room:Number(e.room),
+    setpoint:chartNumber(e.setpoint),
+    target:chartNumber(e.target),
+    room:chartNumber(e.room),
     power:!!e.power,
     turbo:!!e.turbo,
     quiet:!!e.quiet,
@@ -2208,6 +2375,10 @@ function historyActiveModeEvent(minute){
   });
   return active;
 }
+function historySleepTargetHiddenAt(minute){
+  const active = historyActiveModeEvent(minute);
+  return !!active && active.power === false;
+}
 function historyModeBands(start, end){
   if (tempHistoryState.modeEventsUseEpoch !== tempHistoryState.usesEpoch) return '';
   const events = tempHistoryState.modeEvents
@@ -2248,7 +2419,7 @@ function normalizeHistorySamples(data){
   if (!data) return [];
   if (Array.isArray(data.samples)) {
     return data.samples.map(p => {
-      const humidity = Number(p.humidity);
+      const humidity = chartNumber(p.humidity);
       return {minute:Number(p.minute), temp:Number(p.temp), humidity:Number.isFinite(humidity) ? humidity : null};
     }).filter(p => Number.isFinite(p.minute) && Number.isFinite(p.temp));
   }
@@ -2274,12 +2445,13 @@ function normalizeHistorySamples(data){
 function renderTempHistory(data=null){
   const svg = $('tempHistorySvg');
   if (!svg) return;
+  syncHistoryViewBox();
   if (data) {
     tempHistoryState.samples = normalizeHistorySamples(data);
     tempHistoryState.usesEpoch = !!data.usesEpoch;
     if (Array.isArray(data.events)) {
       tempHistoryState.events = data.events
-        .map(e => ({minute:Number(e.minute), source:e.source, stage:e.stage, action:e.action, note:e.note, mode:e.mode, fan:e.fan, setpoint:Number(e.setpoint), target:Number(e.target), room:Number(e.room), power:!!e.power, turbo:!!e.turbo, quiet:!!e.quiet, sleep:!!e.sleep}))
+        .map(e => ({minute:Number(e.minute), source:e.source, stage:e.stage, action:e.action, note:e.note, mode:e.mode, fan:e.fan, setpoint:chartNumber(e.setpoint), target:chartNumber(e.target), room:chartNumber(e.room), power:!!e.power, turbo:!!e.turbo, quiet:!!e.quiet, sleep:!!e.sleep}))
         .filter(e => Number.isFinite(e.minute));
       tempHistoryState.eventsUseEpoch = !!data.eventsUseEpoch;
     }
@@ -2308,9 +2480,9 @@ function renderTempHistory(data=null){
   const visible = samples.filter(p => p.minute >= start && p.minute <= end);
   const viewSamples = visible.length ? visible : samples.slice(-1);
   const targetPoints = historySleepTargetPoints(visible, latest);
-  const targetTemps = targetPoints.map(p => Number(p.target)).filter(Number.isFinite);
+  const targetTemps = targetPoints.map(p => chartNumber(p.target)).filter(Number.isFinite);
   const temps = viewSamples.map(p => p.temp).concat(targetTemps);
-  const humidities = viewSamples.map(p => Number(p.humidity)).filter(Number.isFinite);
+  const humidities = viewSamples.map(p => chartNumber(p.humidity)).filter(Number.isFinite);
   let minTemp = Math.floor(Math.min(...temps) - 1);
   let maxTemp = Math.ceil(Math.max(...temps) + 1);
   minTemp = clamp(minTemp, 10, 40);
@@ -2343,8 +2515,8 @@ function renderTempHistory(data=null){
   if (tempHistoryState.hover && tempHistoryState.hover.minute >= start && tempHistoryState.hover.minute <= end) {
     const hx = historyX(tempHistoryState.hover.minute, start, end).toFixed(1);
     const hy = historyY(tempHistoryState.hover.temp, minTemp, maxTemp).toFixed(1);
-    const hh = Number(tempHistoryState.hover.humidity);
-    const ht = Number(tempHistoryState.hover.target);
+    const hh = chartNumber(tempHistoryState.hover.humidity);
+    const ht = chartNumber(tempHistoryState.hover.target);
     const humidityDot = Number.isFinite(hh)
       ? `<circle class="history-hover-dot humidity" cx="${hx}" cy="${historyY(hh, minHumidity, maxHumidity).toFixed(1)}" r="4.5"></circle>`
       : '';
@@ -2357,10 +2529,11 @@ function renderTempHistory(data=null){
   if (last.minute >= start && last.minute <= end) {
     const lx = historyX(last.minute,start,end).toFixed(1);
     lastNode = `<circle cx="${lx}" cy="${historyY(last.temp,minTemp,maxTemp).toFixed(1)}" r="5" fill="var(--history-temp)"></circle>`;
-    if (Number.isFinite(Number(last.humidity))) lastNode += `<circle cx="${lx}" cy="${historyY(Number(last.humidity),minHumidity,maxHumidity).toFixed(1)}" r="4.5" fill="var(--history-humidity)"></circle>`;
+    const lastPointHumidity = chartNumber(last.humidity);
+    if (Number.isFinite(lastPointHumidity)) lastNode += `<circle cx="${lx}" cy="${historyY(lastPointHumidity,minHumidity,maxHumidity).toFixed(1)}" r="4.5" fill="var(--history-humidity)"></circle>`;
   }
   const eventMarkers = tempHistoryState.eventsUseEpoch === tempHistoryState.usesEpoch
-    ? filteredControlLogs(tempHistoryState.events).filter(e => e.minute >= start && e.minute <= end).map(e => {
+    ? historyChartEvents(tempHistoryState.events).filter(e => e.minute >= start && e.minute <= end).map(e => {
       const x = historyX(e.minute, start, end).toFixed(1);
       return `<line class="history-event-line" x1="${x}" y1="${historyView.t}" x2="${x}" y2="${baseY}"></line><circle class="history-event-dot" cx="${x}" cy="${historyView.t + 10}" r="4"></circle>`;
     }).join('')
@@ -2370,7 +2543,7 @@ function renderTempHistory(data=null){
   if ($('tempHistoryBadge')) $('tempHistoryBadge').textContent = `${samples.length} / 4320 点`;
   if ($('tempHistoryInfo')) {
     const spanHours = Math.max(1, Math.round((end - start) / 60));
-    const lastHumidity = Number(last.humidity);
+    const lastHumidity = chartNumber(last.humidity);
     const humidityText = Number.isFinite(lastHumidity) ? ` / ${lastHumidity.toFixed(0)}%` : '';
     $('tempHistoryInfo').textContent = `最近 ${last.temp.toFixed(1)} ℃${humidityText}，当前视窗约 ${spanHours} 小时；红色室温，蓝色湿度，紫色虚线睡眠目标，底纹表示空调运行模式。`;
   }
@@ -2417,7 +2590,9 @@ function historyPointFromClient(clientX, clientY=0){
   if (!best) return null;
   const latest = tempHistoryState.samples[tempHistoryState.samples.length - 1]?.minute || best.minute;
   return Object.assign({}, best, {
-    target: sleepTargetForHistoryMinute(best.minute, tempHistoryState.usesEpoch, latest)
+    target: historySleepTargetHiddenAt(best.minute)
+      ? null
+      : sleepTargetForHistoryMinute(best.minute, tempHistoryState.usesEpoch, latest)
   });
 }
 function historyPointFromEvent(evt){
@@ -2429,7 +2604,7 @@ function nearestHistoryEvent(minute){
   const tolerance = Math.max(2, span / 120);
   let best = null;
   let bestDist = Infinity;
-  filteredControlLogs(tempHistoryState.events).forEach(e => {
+  historyChartEvents(tempHistoryState.events).forEach(e => {
     if (e.minute < tempHistoryState.start || e.minute > tempHistoryState.end) return;
     const dist = Math.abs(e.minute - minute);
     if (dist < bestDist) { bestDist = dist; best = e; }
@@ -2459,9 +2634,9 @@ function showTempHistoryTooltipAt(clientX, clientY){
   tip.style.top = y + 'px';
   tip.style.display = 'block';
   const event = nearestHistoryEvent(point.minute);
-  const humidity = Number(point.humidity);
+  const humidity = chartNumber(point.humidity);
   const humidityText = Number.isFinite(humidity) ? ` · ${humidity.toFixed(0)}%` : '';
-  const target = Number(point.target);
+  const target = chartNumber(point.target);
   const targetText = Number.isFinite(target) ? `<span>睡眠目标 ${target.toFixed(1)} ℃</span>` : '';
   const modeTextLine = historyModeSummary(historyActiveModeEvent(point.minute));
   const modeTextHtml = modeTextLine ? `<span>${modeTextLine}</span>` : '';
@@ -2906,7 +3081,8 @@ function bindCurveEditor(){
   });
   $('sleepStart').addEventListener('input', () => { renderCurve(); scheduleCurveAutoSave(); });
   $('quietSwitchMinute').addEventListener('input', () => { renderCurve(); scheduleCurveAutoSave(); });
-  ['autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','controlInterval','deadband','autoSendDelta'].forEach(id => {
+  $('curveProfile')?.addEventListener('change', () => handleCurveProfileChange());
+  ['autoEnabled','weekendMode','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','controlInterval','deadband','autoSendDelta'].forEach(id => {
     const el = $(id);
     if (el) el.addEventListener('input', () => scheduleCurveAutoSave());
   });
@@ -3336,7 +3512,8 @@ function applyLive(data){
     const humidityPart = data.autoTarget.humidityActive && Number.isFinite(Number(data.humidity))
       ? ` · 湿度 ${Number(data.humidity).toFixed(0)}% / 目标 ${Number(data.autoTarget.targetHumidity).toFixed(0)}%`
       : '';
-    const elapsedPart = data.autoTarget.curveActive ? ` / +${data.autoTarget.elapsedMinute} 分` : ' / 湿度控制';
+    const profilePart = data.autoTarget.curveActive ? ` / ${data.autoTarget.profile === 'weekend' ? '周末' : '工作日'}` : '';
+    const elapsedPart = data.autoTarget.curveActive ? ` / +${data.autoTarget.elapsedMinute} 分${profilePart}` : ' / 湿度控制';
     $('curveTargetBadge').textContent = data.autoTarget.active
       ? `室温 ${room} · 目标 ${targetText} · 设定 ${setpointText} / ${mode}${humidityPart}${elapsedPart}`
       : '目标 -- / 曲线未生效';
@@ -3363,7 +3540,8 @@ async function refresh(force=false){
     state = await fetchJsonSafe('/api/status', {}, '完整状态', 1, 45000);
     applyLive(state);
     $('protocolBadge').textContent = state.config && state.config.acProtocol ? (`当前 ${state.config.acProtocol} / 型号 ${state.config.acModel || 1}`) : '协议未配置';
-    $('curveBadge').textContent = state.config && state.config.autoEnabled ? '自动控制已开启' : '自动控制关闭';
+    const weekendModeLabel = {off:'周末关闭', single:'单休周末', double:'双休周末'}[state.config?.weekendMode || 'off'] || '周末关闭';
+    $('curveBadge').textContent = state.config && state.config.autoEnabled ? `自动控制已开启 · ${weekendModeLabel}` : `自动控制关闭 · ${weekendModeLabel}`;
 
     setValue('staSsid', state.config.staSsid || '', force);
     const protocols = state.supportedProtocols || [];
@@ -3380,16 +3558,13 @@ async function refresh(force=false){
     setValue('swingH', String(!!state.config.remoteSwingH), force);
     setValue('filterFlag', String(!!state.config.remoteFilter), force);
     setValue('autoEnabled', String(!!state.config.autoEnabled), force);
-    setValue('autoMode', state.config.autoMode || 'cool', force);
-    setValue('curveControlMode', state.config.curveControlMode || 'staged', force);
-    setValue('curveEndAction', state.config.curveEndAction || 'hold', force);
-    setValue('curveHumidityEnabled', String(!!state.config.curveHumidityEnabled), force);
-    setValue('sleepStart', minToHhmm(state.config.sleepStartMinute), force);
-    setValue('quietSwitchMinute', minToHhmm(Number(state.config.sleepStartMinute || 0) + Number(state.config.quietSwitchMinute ?? 90)), force);
-    setValue('sleepDuration', minToHhmm(Number(state.config.sleepStartMinute || 0) + Number(state.config.sleepDurationMinute || 480)), force);
-    setValue('controlInterval', state.config.controlIntervalSec, force);
-    setValue('deadband', state.config.deadband, force);
-    setValue('autoSendDelta', state.config.autoSendDelta ?? 0.5, force);
+    setValue('weekendMode', state.config.weekendMode || 'off', force);
+    if (force || !curveProfileFieldsDirty()) {
+      curveProfileDrafts.weekday = null;
+      curveProfileDrafts.weekend = null;
+      loadCurveProfile($('curveProfile')?.value || activeCurveProfile, true);
+      clearDirty(curveProfileFieldIds);
+    }
     setValue('sensorTempOffset', state.config.sensorTempOffset ?? 0, force);
     setValue('sensorHumidityOffset', state.config.sensorHumidityOffset ?? 0, force);
     setValue('humidityControlEnabled', String(!!state.config.humidityControlEnabled), force);
@@ -3409,8 +3584,6 @@ async function refresh(force=false){
     if ($('settingsBadge')) $('settingsBadge').textContent = `急速学习 ${Number(state.config.learnedFastRate || 0).toFixed(3)} · 安静学习 ${Number(state.config.learnedQuietRate || 0).toFixed(3)}`;
     renderAcProfiles(state.config, force);
     applyCapabilities();
-    setValue('curve', JSON.stringify(state.config.curve), force);
-    renderCurve();
     renderLearned(state.learned);
     renderPresets(state.presets || []);
     if (!$('msg').textContent) msg('状态已更新');
@@ -3758,7 +3931,9 @@ async function saveCurve(auto=false){
     syncCurveTextarea(curve, false);
     if (!auto) msg('正在发送...');
     await fetchTextSafe('/api/curve', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      profile:activeCurveProfile,
       autoEnabled:$('autoEnabled').value==='true',
+      weekendMode:$('weekendMode')?.value || 'off',
       autoMode:$('autoMode').value,
       curveControlMode:$('curveControlMode').value,
       curveEndAction:$('curveEndAction').value,
@@ -3771,7 +3946,8 @@ async function saveCurve(auto=false){
       autoSendDelta:Number($('autoSendDelta').value),
       curve
     })}, '睡眠曲线保存', 1, 30000);
-    clearDirty(['autoEnabled','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve']);
+    curveProfileDrafts[activeCurveProfile] = curveProfilePayloadFromUi();
+    clearDirty(['autoEnabled','weekendMode','autoMode','curveControlMode','curveEndAction','curveHumidityEnabled','quietSwitchMinute','sleepStart','sleepDuration','controlInterval','deadband','autoSendDelta','curve']);
     msg(auto ? '睡眠曲线已自动保存' : '睡眠曲线已保存');
   } catch(e) {
     msg(e.message || '曲线 JSON 无效', true);
@@ -3810,7 +3986,10 @@ async function startDashboardRefresh(){
   await refreshTempHistory();
 }
 startDashboardRefresh();
-window.addEventListener('resize', () => requestAnimationFrame(fitStatusReadouts));
+window.addEventListener('resize', () => requestAnimationFrame(() => {
+  fitStatusReadouts();
+  if ($('tempHistorySvg')) renderTempHistory();
+}));
 setInterval(refreshLive, 3000);
 setInterval(() => refresh(false), 60000);
 setInterval(refreshTempHistory, 120000);
@@ -5158,19 +5337,88 @@ void normalizePresetCommand(PresetCommand &cmd) {
   normalizeExclusiveSpecials(cmd.turbo, cmd.quiet, cmd.sleep);
 }
 
+bool validAutoModeValue(const String &mode) {
+  return mode == "smart" || mode == "cool" || mode == "auto" ||
+         mode == "dry" || mode == "heat" || mode == "fan";
+}
+
+bool validCurveControlModeValue(const String &mode) {
+  return mode == "staged" || mode == "fast" || mode == "quiet";
+}
+
+bool validCurveEndActionValue(const String &action) {
+  return action == "hold" || action == "poweroff";
+}
+
+void normalizeSleepCurveProfile(SleepCurveProfile &profile) {
+  if (!validAutoModeValue(profile.autoMode)) profile.autoMode = "smart";
+  if (!validCurveControlModeValue(profile.curveControlMode)) profile.curveControlMode = "staged";
+  if (!validCurveEndActionValue(profile.curveEndAction)) profile.curveEndAction = "hold";
+  profile.sleepStartMinute %= 1440;
+  profile.sleepDurationMinute = profile.sleepDurationMinute > 1439 ? 1439 : profile.sleepDurationMinute;
+  if (profile.sleepDurationMinute < 30) profile.sleepDurationMinute = 30;
+  if (profile.quietSwitchMinute > 1439) profile.quietSwitchMinute = 1439;
+  if (profile.controlIntervalSec < 5) profile.controlIntervalSec = 5;
+  profile.deadband = clampFloat(profile.deadband, 0.1f, 3.0f);
+  profile.autoSendDelta = clampFloat(profile.autoSendDelta, 0.0f, 10.0f);
+  if (profile.curveCount == 0) {
+    profile.curve[0] = {0, 26.0f};
+    profile.curveCount = 1;
+  }
+  if (profile.curveCount > kMaxCurvePoints) profile.curveCount = kMaxCurvePoints;
+  for (uint8_t i = 0; i < profile.curveCount; i++) {
+    profile.curve[i].minute = profile.curve[i].minute > profile.sleepDurationMinute ? profile.sleepDurationMinute : profile.curve[i].minute;
+    profile.curve[i].temp = clampFloat(profile.curve[i].temp, config.minSetpoint, config.maxSetpoint);
+  }
+}
+
+SleepCurveProfile weekdaySleepCurveProfile() {
+  SleepCurveProfile profile;
+  profile.autoMode = config.autoMode;
+  profile.curveControlMode = config.curveControlMode;
+  profile.curveEndAction = config.curveEndAction;
+  profile.quietSwitchMinute = config.quietSwitchMinute;
+  profile.sleepStartMinute = config.sleepStartMinute;
+  profile.sleepDurationMinute = config.sleepDurationMinute;
+  profile.controlIntervalSec = config.controlIntervalSec;
+  profile.deadband = config.deadband;
+  profile.autoSendDelta = config.autoSendDelta;
+  profile.curveHumidityEnabled = config.curveHumidityEnabled;
+  profile.lastCurveEndPoweroffKey = config.lastCurveEndPoweroffKey;
+  profile.curveCount = config.curveCount;
+  for (uint8_t i = 0; i < profile.curveCount && i < kMaxCurvePoints; i++) {
+    profile.curve[i] = config.curve[i];
+  }
+  normalizeSleepCurveProfile(profile);
+  return profile;
+}
+
+void applySleepCurveProfileToWeekday(const SleepCurveProfile &profile) {
+  config.autoMode = profile.autoMode;
+  config.curveControlMode = profile.curveControlMode;
+  config.curveEndAction = profile.curveEndAction;
+  config.quietSwitchMinute = profile.quietSwitchMinute;
+  config.sleepStartMinute = profile.sleepStartMinute;
+  config.sleepDurationMinute = profile.sleepDurationMinute;
+  config.controlIntervalSec = profile.controlIntervalSec;
+  config.deadband = profile.deadband;
+  config.autoSendDelta = profile.autoSendDelta;
+  config.curveHumidityEnabled = profile.curveHumidityEnabled;
+  config.lastCurveEndPoweroffKey = profile.lastCurveEndPoweroffKey;
+  config.curveCount = profile.curveCount;
+  for (uint8_t i = 0; i < config.curveCount && i < kMaxCurvePoints; i++) {
+    config.curve[i] = profile.curve[i];
+  }
+}
+
 void normalizeCurveControlConfig() {
-  if (config.autoMode != "smart" && config.autoMode != "cool" && config.autoMode != "auto" &&
-      config.autoMode != "dry" && config.autoMode != "heat" && config.autoMode != "fan") {
-    config.autoMode = "smart";
+  SleepCurveProfile weekday = weekdaySleepCurveProfile();
+  normalizeSleepCurveProfile(weekday);
+  applySleepCurveProfileToWeekday(weekday);
+  normalizeSleepCurveProfile(config.weekend);
+  if (config.weekendMode != "off" && config.weekendMode != "single" && config.weekendMode != "double") {
+    config.weekendMode = "off";
   }
-  if (config.curveControlMode != "staged" && config.curveControlMode != "fast" &&
-      config.curveControlMode != "quiet") {
-    config.curveControlMode = "staged";
-  }
-  if (config.curveEndAction != "hold" && config.curveEndAction != "poweroff") {
-    config.curveEndAction = "hold";
-  }
-  if (config.quietSwitchMinute > 1439) config.quietSwitchMinute = 1439;
 }
 
 void normalizeTuningConfig() {
@@ -5183,6 +5431,53 @@ void normalizeTuningConfig() {
   config.learnedQuietRate = clampFloat(config.learnedQuietRate, 0.0f, 2.0f);
   config.closedLoopFastGain = clampFloat(config.closedLoopFastGain, 0.5f, 5.0f);
   config.closedLoopQuietGain = clampFloat(config.closedLoopQuietGain, 0.2f, 3.0f);
+}
+
+void addSleepCurveProfileToJson(JsonObject obj, const SleepCurveProfile &profile) {
+  obj["autoMode"] = profile.autoMode;
+  obj["curveControlMode"] = profile.curveControlMode;
+  obj["curveEndAction"] = profile.curveEndAction;
+  obj["quietSwitchMinute"] = profile.quietSwitchMinute;
+  obj["sleepStartMinute"] = profile.sleepStartMinute;
+  obj["sleepDurationMinute"] = profile.sleepDurationMinute;
+  obj["controlIntervalSec"] = profile.controlIntervalSec;
+  obj["deadband"] = profile.deadband;
+  obj["autoSendDelta"] = profile.autoSendDelta;
+  obj["curveHumidityEnabled"] = profile.curveHumidityEnabled;
+  obj["lastCurveEndPoweroffKey"] = profile.lastCurveEndPoweroffKey;
+  JsonArray curve = obj["curve"].to<JsonArray>();
+  for (uint8_t i = 0; i < profile.curveCount; i++) {
+    JsonObject point = curve.add<JsonObject>();
+    point["minute"] = profile.curve[i].minute;
+    point["temp"] = profile.curve[i].temp;
+  }
+}
+
+void readSleepCurveProfileFromJson(SleepCurveProfile &profile, JsonObject src) {
+  if (src["autoMode"].is<const char *>()) profile.autoMode = src["autoMode"] | profile.autoMode;
+  if (src["curveControlMode"].is<const char *>()) profile.curveControlMode = src["curveControlMode"] | profile.curveControlMode;
+  if (src["curveEndAction"].is<const char *>()) profile.curveEndAction = src["curveEndAction"] | profile.curveEndAction;
+  if (src["quietSwitchMinute"].is<int>()) profile.quietSwitchMinute = src["quietSwitchMinute"] | profile.quietSwitchMinute;
+  if (src["sleepStartMinute"].is<int>()) profile.sleepStartMinute = (src["sleepStartMinute"] | profile.sleepStartMinute) % 1440;
+  if (src["sleepDurationMinute"].is<int>()) profile.sleepDurationMinute = src["sleepDurationMinute"] | profile.sleepDurationMinute;
+  if (src["controlIntervalSec"].is<int>()) profile.controlIntervalSec = src["controlIntervalSec"] | profile.controlIntervalSec;
+  if (src["deadband"].is<float>() || src["deadband"].is<int>()) profile.deadband = src["deadband"] | profile.deadband;
+  if (src["autoSendDelta"].is<float>() || src["autoSendDelta"].is<int>()) profile.autoSendDelta = src["autoSendDelta"] | profile.autoSendDelta;
+  if (src["curveHumidityEnabled"].is<bool>()) profile.curveHumidityEnabled = src["curveHumidityEnabled"] | profile.curveHumidityEnabled;
+  if (src["lastCurveEndPoweroffKey"].is<uint32_t>() || src["lastCurveEndPoweroffKey"].is<int>()) {
+    profile.lastCurveEndPoweroffKey = src["lastCurveEndPoweroffKey"] | profile.lastCurveEndPoweroffKey;
+  }
+  JsonArray curve = src["curve"].as<JsonArray>();
+  if (!curve.isNull()) {
+    profile.curveCount = 0;
+    for (JsonObject point : curve) {
+      if (profile.curveCount >= kMaxCurvePoints) break;
+      profile.curve[profile.curveCount].minute = point["minute"] | 0;
+      profile.curve[profile.curveCount].temp = clampFloat(point["temp"] | 26.0f, config.minSetpoint, config.maxSetpoint);
+      profile.curveCount++;
+    }
+  }
+  normalizeSleepCurveProfile(profile);
 }
 
 bool readJsonFile(const char *path, JsonDocument &doc) {
@@ -5493,6 +5788,7 @@ void saveConfig() {
   doc["acProtocol"] = typeToString(config.acProtocol);
   doc["acModel"] = config.acModel;
   doc["autoEnabled"] = config.autoEnabled;
+  doc["weekendMode"] = config.weekendMode;
   doc["autoMode"] = config.autoMode;
   doc["remotePower"] = config.remotePower;
   doc["remoteMode"] = config.remoteMode;
@@ -5540,6 +5836,8 @@ void saveConfig() {
     point["minute"] = config.curve[i].minute;
     point["temp"] = config.curve[i].temp;
   }
+  JsonObject weekend = doc["weekend"].to<JsonObject>();
+  addSleepCurveProfileToJson(weekend, config.weekend);
   JsonArray profiles = doc["acProfiles"].to<JsonArray>();
   for (uint8_t i = 0; i < acProfileCount; i++) {
     JsonObject item = profiles.add<JsonObject>();
@@ -5563,6 +5861,7 @@ void loadConfig() {
   config.acProtocol = strToDecodeType((doc["acProtocol"] | "UNKNOWN"));
   config.acModel = doc["acModel"] | 1;
   config.autoEnabled = doc["autoEnabled"] | false;
+  config.weekendMode = doc["weekendMode"] | config.weekendMode;
   config.autoMode = doc["autoMode"] | config.autoMode;
   config.remotePower = doc["remotePower"] | config.remotePower;
   config.remoteMode = doc["remoteMode"] | config.remoteMode;
@@ -5619,6 +5918,13 @@ void loadConfig() {
     }
     if (config.curveCount == 0) config.curveCount = 1;
   }
+  JsonObject weekend = doc["weekend"].as<JsonObject>();
+  if (!weekend.isNull()) {
+    readSleepCurveProfileFromJson(config.weekend, weekend);
+  } else {
+    config.weekend = weekdaySleepCurveProfile();
+  }
+  normalizeCurveControlConfig();
   JsonArray profiles = doc["acProfiles"].as<JsonArray>();
   if (!profiles.isNull()) {
     acProfileCount = 0;
@@ -6442,14 +6748,14 @@ void updateAdaptiveRate(const String &stage, float target) {
   normalizeTuningConfig();
 }
 
-bool shouldPredictiveSkip(float target, String *reasonOut) {
+bool shouldPredictiveSkip(float target, String *reasonOut, float deadband = config.deadband) {
   if (!config.predictiveSkipEnabled || isnan(roomTempC)) return false;
   float slope = 0.0f;
   if (!tempTrendPerMinute(15, &slope)) return false;
   float error = fabs(roomTempC - target);
   bool movingTowardTarget = (roomTempC > target && slope < -0.01f) || (roomTempC < target && slope > 0.01f);
-  if (!movingTowardTarget || error <= config.deadband || error > 1.4f) return false;
-  float minutesToBand = (error - config.deadband) / max(0.01f, fabs(slope));
+  if (!movingTowardTarget || error <= deadband || error > 1.4f) return false;
+  float minutesToBand = (error - deadband) / max(0.01f, fabs(slope));
   if (minutesToBand > 25.0f) return false;
   if (reasonOut != nullptr) {
     *reasonOut = "趋势已接近目标，预计 " + String(minutesToBand, 0) + " 分钟进入死区";
@@ -7327,37 +7633,135 @@ void handlePendingIr() {
   }
 }
 
-float targetTempForSleepCurve(uint16_t elapsedMinute) {
-  if (config.curveCount == 0) return 26.0f;
-  if (elapsedMinute <= config.curve[0].minute) return config.curve[0].temp;
-  for (uint8_t i = 1; i < config.curveCount; i++) {
-    CurvePoint prev = config.curve[i - 1];
-    CurvePoint next = config.curve[i];
+struct ActiveSleepCurve {
+  bool active = false;
+  bool weekend = false;
+  uint16_t elapsed = 0;
+  SleepCurveProfile profile;
+};
+
+bool sleepCurveProfileIsActive(uint16_t nowMinute, const SleepCurveProfile &profile, uint16_t *elapsedOut) {
+  uint16_t start = profile.sleepStartMinute % 1440;
+  uint16_t duration = profile.sleepDurationMinute > 1439 ? 1439 : profile.sleepDurationMinute;
+  uint16_t elapsed = (nowMinute + 1440 - start) % 1440;
+  if (elapsed <= duration) {
+    if (elapsedOut != nullptr) *elapsedOut = elapsed;
+    return true;
+  }
+  return false;
+}
+
+uint8_t sleepCurveWakeDayForProfile(uint16_t nowMinute, const SleepCurveProfile &profile) {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo, 5)) return 255;
+  uint16_t start = profile.sleepStartMinute % 1440;
+  uint16_t duration = profile.sleepDurationMinute > 1439 ? 1439 : profile.sleepDurationMinute;
+  timeinfo.tm_hour = 12;
+  timeinfo.tm_min = 0;
+  timeinfo.tm_sec = 0;
+  timeinfo.tm_isdst = -1;
+  if (nowMinute < start) timeinfo.tm_mday -= 1;
+  timeinfo.tm_mday += (start + duration) / 1440;
+  mktime(&timeinfo);
+  return static_cast<uint8_t>(timeinfo.tm_wday);
+}
+
+bool weekendModeMatchesWakeDay(uint8_t wakeDay) {
+  if (config.weekendMode == "double") return wakeDay == 0 || wakeDay == 6;
+  if (config.weekendMode == "single") return wakeDay == 0;
+  return false;
+}
+
+bool activeSleepCurveForNow(uint16_t nowMinute, ActiveSleepCurve *out) {
+  SleepCurveProfile weekend = config.weekend;
+  normalizeSleepCurveProfile(weekend);
+  uint16_t elapsed = 0;
+  if (config.weekendMode != "off" && sleepCurveProfileIsActive(nowMinute, weekend, &elapsed)) {
+    uint8_t wakeDay = sleepCurveWakeDayForProfile(nowMinute, weekend);
+    if (weekendModeMatchesWakeDay(wakeDay)) {
+      if (out != nullptr) {
+        out->active = true;
+        out->weekend = true;
+        out->elapsed = elapsed;
+        out->profile = weekend;
+      }
+      return true;
+    }
+  }
+
+  SleepCurveProfile weekday = weekdaySleepCurveProfile();
+  if (sleepCurveProfileIsActive(nowMinute, weekday, &elapsed)) {
+    uint8_t wakeDay = sleepCurveWakeDayForProfile(nowMinute, weekday);
+    if (weekendModeMatchesWakeDay(wakeDay)) {
+      if (out != nullptr) *out = ActiveSleepCurve();
+      return false;
+    }
+    if (out != nullptr) {
+      out->active = true;
+      out->weekend = false;
+      out->elapsed = elapsed;
+      out->profile = weekday;
+    }
+    return true;
+  }
+  if (out != nullptr) *out = ActiveSleepCurve();
+  return false;
+}
+
+uint32_t sleepCurveCycleKeyForProfile(uint16_t nowMinute, const SleepCurveProfile &profile) {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo, 5)) return 0;
+  timeinfo.tm_hour = 12;
+  timeinfo.tm_min = 0;
+  timeinfo.tm_sec = 0;
+  timeinfo.tm_isdst = -1;
+  if (nowMinute < profile.sleepStartMinute % 1440) {
+    timeinfo.tm_mday -= 1;
+  }
+  mktime(&timeinfo);
+  return static_cast<uint32_t>(timeinfo.tm_year + 1900) * 1000UL +
+         static_cast<uint32_t>(timeinfo.tm_yday + 1);
+}
+
+float targetTempForSleepCurve(uint16_t elapsedMinute, const SleepCurveProfile &profile) {
+  if (profile.curveCount == 0) return 26.0f;
+  if (elapsedMinute <= profile.curve[0].minute) return profile.curve[0].temp;
+  for (uint8_t i = 1; i < profile.curveCount; i++) {
+    CurvePoint prev = profile.curve[i - 1];
+    CurvePoint next = profile.curve[i];
     if (elapsedMinute <= next.minute) {
       uint16_t span = next.minute > prev.minute ? next.minute - prev.minute : 1;
       float ratio = static_cast<float>(elapsedMinute - prev.minute) / static_cast<float>(span);
       return prev.temp + (next.temp - prev.temp) * ratio;
     }
   }
-  return config.curve[config.curveCount - 1].temp;
+  return profile.curve[profile.curveCount - 1].temp;
+}
+
+float targetTempForSleepCurve(uint16_t elapsedMinute) {
+  return targetTempForSleepCurve(elapsedMinute, weekdaySleepCurveProfile());
+}
+
+String curveStageForElapsed(uint16_t elapsedMinute, const SleepCurveProfile &profile) {
+  if (profile.curveControlMode != "quiet" && elapsedMinute >= profile.quietSwitchMinute) return "quiet";
+  if (profile.curveControlMode == "quiet") return "quiet";
+  return "fast";
 }
 
 String curveStageForElapsed(uint16_t elapsedMinute) {
-  if (config.curveControlMode != "quiet" && elapsedMinute >= config.quietSwitchMinute) return "quiet";
-  if (config.curveControlMode == "quiet") return "quiet";
-  return "fast";
+  return curveStageForElapsed(elapsedMinute, weekdaySleepCurveProfile());
 }
 
 bool isHeatCoolMode(const String &mode) {
   return mode == "heat" || mode == "cool";
 }
 
-String smartModeForTarget(float target) {
+String smartModeForTarget(float target, float deadband, uint16_t controlIntervalSec) {
   if (isnan(roomTempC)) return "auto";
-  float enterBand = max(config.deadband, 0.35f);
+  float enterBand = max(deadband, 0.35f);
   float reverseBand = max(enterBand + 0.85f, 1.15f);
   float forceReverseBand = max(reverseBand + 0.75f, 1.9f);
-  uint32_t intervalHoldMs = static_cast<uint32_t>(config.controlIntervalSec) * 4UL * 1000UL;
+  uint32_t intervalHoldMs = static_cast<uint32_t>(controlIntervalSec) * 4UL * 1000UL;
   uint32_t minHoldMs = intervalHoldMs > 12UL * 60UL * 1000UL ? intervalHoldMs : 12UL * 60UL * 1000UL;
   bool holdTimeOk = lastAutoModeChangeMs == 0 || millis() - lastAutoModeChangeMs >= minHoldMs;
   String heldMode = isHeatCoolMode(lastAutoSentMode)
@@ -7381,9 +7785,17 @@ String smartModeForTarget(float target) {
   return "auto";
 }
 
-String effectiveControlMode(float target, const String &configuredMode) {
-  if (configuredMode == "smart") return smartModeForTarget(target);
+String smartModeForTarget(float target) {
+  return smartModeForTarget(target, config.deadband, config.controlIntervalSec);
+}
+
+String effectiveControlMode(float target, const String &configuredMode, float deadband, uint16_t controlIntervalSec) {
+  if (configuredMode == "smart") return smartModeForTarget(target, deadband, controlIntervalSec);
   return configuredMode;
+}
+
+String effectiveControlMode(float target, const String &configuredMode) {
+  return effectiveControlMode(target, configuredMode, config.deadband, config.controlIntervalSec);
 }
 
 float temperatureDemand(float target, const String &mode) {
@@ -7393,17 +7805,25 @@ float temperatureDemand(float target, const String &mode) {
   return roomTempC - target;
 }
 
-String fanForSleepDemand(float demand, bool quietStage, bool dehumidifying) {
+String fanForSleepDemand(float demand, bool quietStage, bool dehumidifying, float deadband) {
   if (quietStage) return "low";
-  float lowThreshold = max(config.deadband, 0.25f);
+  float lowThreshold = max(deadband, 0.25f);
   if (demand <= lowThreshold) return "low";
   if (dehumidifying) return demand >= 1.0f ? "medium" : "low";
   return demand >= 1.0f ? "high" : "medium";
 }
 
-bool turboForSleepDemand(float demand, bool quietStage, bool dehumidifying) {
+String fanForSleepDemand(float demand, bool quietStage, bool dehumidifying) {
+  return fanForSleepDemand(demand, quietStage, dehumidifying, config.deadband);
+}
+
+bool turboForSleepDemand(float demand, bool quietStage, bool dehumidifying, float deadband) {
   if (quietStage || dehumidifying) return false;
-  return demand >= max(1.2f, config.deadband * 3.0f);
+  return demand >= max(1.2f, deadband * 3.0f);
+}
+
+bool turboForSleepDemand(float demand, bool quietStage, bool dehumidifying) {
+  return turboForSleepDemand(demand, quietStage, dehumidifying, config.deadband);
 }
 
 bool quietForSleepDemand(bool quietStage, bool curveActive) {
@@ -7427,29 +7847,14 @@ float closedLoopSetpoint(float target, const String &mode, const String &stage =
 }
 
 bool sleepCurveIsActive(uint16_t nowMinute, uint16_t *elapsedOut) {
-  uint16_t start = config.sleepStartMinute % 1440;
-  uint16_t duration = config.sleepDurationMinute > 1439 ? 1439 : config.sleepDurationMinute;
-  uint16_t elapsed = (nowMinute + 1440 - start) % 1440;
-  if (elapsed <= duration) {
-    *elapsedOut = elapsed;
-    return true;
-  }
-  return false;
+  ActiveSleepCurve active;
+  bool ok = activeSleepCurveForNow(nowMinute, &active);
+  if (ok && elapsedOut != nullptr) *elapsedOut = active.elapsed;
+  return ok;
 }
 
 uint32_t sleepCurveCycleKey(uint16_t nowMinute) {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo, 5)) return 0;
-  timeinfo.tm_hour = 12;
-  timeinfo.tm_min = 0;
-  timeinfo.tm_sec = 0;
-  timeinfo.tm_isdst = -1;
-  if (nowMinute < config.sleepStartMinute % 1440) {
-    timeinfo.tm_mday -= 1;
-  }
-  mktime(&timeinfo);
-  return static_cast<uint32_t>(timeinfo.tm_year + 1900) * 1000UL +
-         static_cast<uint32_t>(timeinfo.tm_yday + 1);
+  return sleepCurveCycleKeyForProfile(nowMinute, weekdaySleepCurveProfile());
 }
 
 void resetAutoSendMemory() {
@@ -7483,6 +7888,7 @@ void runAutoControl() {
   bool anyAutomaticEnabled = config.autoEnabled || config.humidityControlEnabled;
   if (!anyAutomaticEnabled) {
     sleepCurveWasActive = false;
+    sleepCurveWasWeekendProfile = false;
     resetAutoSendMemory();
     return;
   }
@@ -7490,24 +7896,28 @@ void runAutoControl() {
 
   uint16_t nowMinute = 0;
   bool clockSynced = getLocalMinuteOfDay(&nowMinute);
-  uint16_t elapsed = 0;
-  bool curveActive = clockSynced && config.autoEnabled && sleepCurveIsActive(nowMinute, &elapsed);
+  ActiveSleepCurve activeCurve;
+  bool curveActive = clockSynced && config.autoEnabled && activeSleepCurveForNow(nowMinute, &activeCurve);
+  SleepCurveProfile curveProfile = curveActive
+                                      ? activeCurve.profile
+                                      : (sleepCurveWasWeekendProfile ? config.weekend : weekdaySleepCurveProfile());
+  normalizeSleepCurveProfile(curveProfile);
+  uint16_t elapsed = activeCurve.elapsed;
   if (!curveActive) {
-    if (clockSynced && sleepCurveWasActive && config.humidityControlEnabled) {
-      addDecisionLog("end_hold", "end", "曲线结束，独立湿度控制继续接管，不执行关机", roomTempC, NAN, NAN);
-      resetAutoSendMemory();
-      sleepCurveWasActive = false;
-    } else if (clockSynced && sleepCurveWasActive && config.curveEndAction == "poweroff") {
-      uint32_t cycleKey = sleepCurveCycleKey(nowMinute);
-      if (cycleKey != 0 && config.lastCurveEndPoweroffKey == cycleKey) {
+    SleepCurveProfile endProfile = curveProfile;
+    if (clockSynced && sleepCurveWasActive && endProfile.curveEndAction == "poweroff") {
+      uint32_t cycleKey = sleepCurveCycleKeyForProfile(nowMinute, endProfile);
+      uint32_t &lastPoweroffKey = sleepCurveWasWeekendProfile ? config.weekend.lastCurveEndPoweroffKey : config.lastCurveEndPoweroffKey;
+      if (cycleKey != 0 && lastPoweroffKey == cycleKey) {
         addDecisionLog("skip_end_once", "end", "本睡眠周期结束关机已执行，跳过重复关机", roomTempC, NAN, NAN);
         resetAutoSendMemory();
         lastControlMs = millis();
         sleepCurveWasActive = false;
+        sleepCurveWasWeekendProfile = false;
         return;
       }
       if (cycleKey != 0) {
-        config.lastCurveEndPoweroffKey = cycleKey;
+        lastPoweroffKey = cycleKey;
         saveConfig();
       }
       pendingAc.power = false;
@@ -7527,14 +7937,24 @@ void runAutoControl() {
       resetAutoSendMemory();
       lastControlMs = millis();
       sleepCurveWasActive = false;
+      sleepCurveWasWeekendProfile = false;
       return;
+    } else if (clockSynced && sleepCurveWasActive && config.humidityControlEnabled) {
+      addDecisionLog("end_hold", "end", "曲线结束，独立湿度控制继续接管，不执行关机", roomTempC, NAN, NAN);
+      resetAutoSendMemory();
+      sleepCurveWasActive = false;
+      sleepCurveWasWeekendProfile = false;
     } else if (clockSynced && sleepCurveWasActive) {
       addDecisionLog("end_hold", "end", "曲线结束，保持当前空调状态，不发射红外", roomTempC, NAN, NAN);
     }
-    if (clockSynced) sleepCurveWasActive = false;
+    if (clockSynced) {
+      sleepCurveWasActive = false;
+      sleepCurveWasWeekendProfile = false;
+    }
     if (!config.humidityControlEnabled) return;
   } else {
     sleepCurveWasActive = true;
+    sleepCurveWasWeekendProfile = activeCurve.weekend;
   }
 
   if (isnan(roomTempC)) {
@@ -7542,19 +7962,22 @@ void runAutoControl() {
     lastControlMs = millis();
     return;
   }
-  if (millis() - lastControlMs < static_cast<uint32_t>(config.controlIntervalSec) * 1000UL) return;
+  uint16_t activeControlIntervalSec = curveActive ? curveProfile.controlIntervalSec : config.controlIntervalSec;
+  float activeDeadband = curveActive ? curveProfile.deadband : config.deadband;
+  float activeSendDelta = curveActive ? curveProfile.autoSendDelta : config.autoSendDelta;
+  if (millis() - lastControlMs < static_cast<uint32_t>(activeControlIntervalSec) * 1000UL) return;
 
   float target = curveActive
-                     ? clampFloat(targetTempForSleepCurve(elapsed), config.minSetpoint, config.maxSetpoint)
+                     ? clampFloat(targetTempForSleepCurve(elapsed, curveProfile), config.minSetpoint, config.maxSetpoint)
                      : clampFloat(config.humidityTargetTemp, config.minSetpoint, config.maxSetpoint);
-  String stage = curveActive ? curveStageForElapsed(elapsed) : "humidity";
-  bool humidityEnabledNow = curveActive ? config.curveHumidityEnabled : config.humidityControlEnabled;
+  String stage = curveActive ? curveStageForElapsed(elapsed, curveProfile) : "humidity";
+  bool humidityEnabledNow = curveActive ? curveProfile.curveHumidityEnabled : config.humidityControlEnabled;
   bool humidityHigh = humidityEnabledNow && !isnan(roomHumidity) &&
                       roomHumidity > config.targetHumidity + config.humidityDeadband;
   bool humidityStable = humidityEnabledNow && !isnan(roomHumidity) &&
                         roomHumidity <= config.targetHumidity;
-  bool tempTooLowForDry = humidityHigh && roomTempC < target - max(0.5f, config.deadband);
-  bool tempInBand = fabs(roomTempC - target) < config.deadband;
+  bool tempTooLowForDry = humidityHigh && roomTempC < target - max(0.5f, activeDeadband);
+  bool tempInBand = fabs(roomTempC - target) < activeDeadband;
 
   if (humidityEnabledNow && isnan(roomHumidity)) {
     addDecisionLog("skip_humidity_sensor", stage.c_str(), "等待 SHT31 湿度读数", roomTempC, target, NAN);
@@ -7575,16 +7998,16 @@ void runAutoControl() {
   }
 
   bool quietStage = curveActive ? stage == "quiet" : true;
-  String configuredMode = curveActive ? config.autoMode : "smart";
-  String activeMode = shouldDehumidify ? "dry" : effectiveControlMode(target, configuredMode);
+  String configuredMode = curveActive ? curveProfile.autoMode : "smart";
+  String activeMode = shouldDehumidify ? "dry" : effectiveControlMode(target, configuredMode, activeDeadband, activeControlIntervalSec);
   float demand = temperatureDemand(target, activeMode);
 
   pendingAc.power = true;
   pendingAc.mode = activeMode;
   pendingAc.fan = curveActive
-                      ? fanForSleepDemand(demand, quietStage, shouldDehumidify)
+                      ? fanForSleepDemand(demand, quietStage, shouldDehumidify, activeDeadband)
                       : (shouldDehumidify ? "low" : "auto");
-  pendingAc.turbo = curveActive ? turboForSleepDemand(demand, quietStage, shouldDehumidify) : false;
+  pendingAc.turbo = curveActive ? turboForSleepDemand(demand, quietStage, shouldDehumidify, activeDeadband) : false;
   pendingAc.quiet = curveActive ? quietForSleepDemand(quietStage, true) : true;
   pendingAc.sleep = false;
   pendingAc.swingV = false;
@@ -7594,7 +8017,7 @@ void runAutoControl() {
 
   if (!shouldDehumidify && sameAutoRequestShape(pendingAc)) {
     String predictiveReason;
-    if (shouldPredictiveSkip(target, &predictiveReason)) {
+    if (shouldPredictiveSkip(target, &predictiveReason, activeDeadband)) {
       addDecisionLog("skip_predict", stage.c_str(), predictiveReason.c_str(), roomTempC, target, NAN);
       lastActionResult = "auto skipped predictive";
       lastControlMs = millis();
@@ -7608,9 +8031,9 @@ void runAutoControl() {
     lastAdaptiveSaveMs = millis();
   }
   if (!isnan(lastAutoSentSetpoint) && sameAutoRequestShape(pendingAc) &&
-      fabs(pendingAc.degrees - lastAutoSentSetpoint) <= config.autoSendDelta) {
+      fabs(pendingAc.degrees - lastAutoSentSetpoint) <= activeSendDelta) {
     lastActionResult = "auto skipped delta=" + String(fabs(pendingAc.degrees - lastAutoSentSetpoint), 1) +
-                       "C threshold=" + String(config.autoSendDelta, 1) + "C";
+                       "C threshold=" + String(activeSendDelta, 1) + "C";
     addDecisionLog("skip_delta", stage.c_str(), "模式和设定温度变化未超过发送过滤阈值", roomTempC, target, pendingAc.degrees);
     lastControlMs = millis();
     return;
@@ -7638,6 +8061,7 @@ void addConfigToJson(JsonObject obj) {
   obj["acProtocol"] = typeToString(config.acProtocol);
   obj["acModel"] = config.acModel;
   obj["autoEnabled"] = config.autoEnabled;
+  obj["weekendMode"] = config.weekendMode;
   obj["autoMode"] = config.autoMode;
   obj["remotePower"] = config.remotePower;
   obj["remoteMode"] = config.remoteMode;
@@ -7685,6 +8109,8 @@ void addConfigToJson(JsonObject obj) {
     point["minute"] = config.curve[i].minute;
     point["temp"] = config.curve[i].temp;
   }
+  JsonObject weekend = obj["weekend"].to<JsonObject>();
+  addSleepCurveProfileToJson(weekend, config.weekend);
   JsonArray profiles = obj["acProfiles"].to<JsonArray>();
   for (uint8_t i = 0; i < acProfileCount; i++) {
     JsonObject item = profiles.add<JsonObject>();
@@ -7719,31 +8145,37 @@ void addLiveToJson(JsonDocument &doc) {
   clock["local"] = localTimeText;
   clock["minuteOfDay"] = minuteOfDay;
 
-  uint16_t elapsed = 0;
-  bool curveActive = timeSynced && config.autoEnabled && sleepCurveIsActive(minuteOfDay, &elapsed);
+  ActiveSleepCurve activeCurve;
+  bool curveActive = timeSynced && config.autoEnabled && activeSleepCurveForNow(minuteOfDay, &activeCurve);
+  SleepCurveProfile curveProfile = curveActive ? activeCurve.profile : weekdaySleepCurveProfile();
+  normalizeSleepCurveProfile(curveProfile);
+  uint16_t elapsed = activeCurve.elapsed;
   JsonObject autoTarget = doc["autoTarget"].to<JsonObject>();
   autoTarget["enabled"] = config.autoEnabled;
   autoTarget["active"] = curveActive || config.humidityControlEnabled;
   autoTarget["curveActive"] = curveActive;
-  autoTarget["configuredMode"] = config.autoMode;
-  autoTarget["mode"] = config.autoMode;
-  autoTarget["endAction"] = config.curveEndAction;
+  autoTarget["profile"] = curveActive && activeCurve.weekend ? "weekend" : "weekday";
+  autoTarget["configuredMode"] = curveProfile.autoMode;
+  autoTarget["mode"] = curveProfile.autoMode;
+  autoTarget["endAction"] = curveProfile.curveEndAction;
   autoTarget["humidityControlEnabled"] = config.humidityControlEnabled;
-  autoTarget["curveHumidityEnabled"] = config.curveHumidityEnabled;
-  autoTarget["humidityActive"] = curveActive ? config.curveHumidityEnabled : config.humidityControlEnabled;
+  autoTarget["curveHumidityEnabled"] = curveProfile.curveHumidityEnabled;
+  autoTarget["humidityActive"] = curveActive ? curveProfile.curveHumidityEnabled : config.humidityControlEnabled;
   autoTarget["targetHumidity"] = config.targetHumidity;
   autoTarget["humidityDeadband"] = config.humidityDeadband;
   if (isnan(roomHumidity)) autoTarget["humidityError"] = nullptr;
   else autoTarget["humidityError"] = roomHumidity - config.targetHumidity;
   if (curveActive) {
-    float target = clampFloat(targetTempForSleepCurve(elapsed), config.minSetpoint, config.maxSetpoint);
-    String stage = curveStageForElapsed(elapsed);
+    float target = clampFloat(targetTempForSleepCurve(elapsed, curveProfile), config.minSetpoint, config.maxSetpoint);
+    String stage = curveStageForElapsed(elapsed, curveProfile);
     bool quietStage = stage == "quiet";
-    bool humidityHigh = config.curveHumidityEnabled && !isnan(roomHumidity) &&
+    bool humidityHigh = curveProfile.curveHumidityEnabled && !isnan(roomHumidity) &&
                         roomHumidity > config.targetHumidity + config.humidityDeadband;
     bool tempTooLowForDry = humidityHigh && !isnan(roomTempC) &&
-                            roomTempC < target - max(0.5f, config.deadband);
-    String activeMode = humidityHigh && !tempTooLowForDry ? "dry" : effectiveControlMode(target, config.autoMode);
+                            roomTempC < target - max(0.5f, curveProfile.deadband);
+    String activeMode = humidityHigh && !tempTooLowForDry
+                            ? "dry"
+                            : effectiveControlMode(target, curveProfile.autoMode, curveProfile.deadband, curveProfile.controlIntervalSec);
     float demand = temperatureDemand(target, activeMode);
     autoTarget["mode"] = activeMode;
     autoTarget["elapsedMinute"] = elapsed;
@@ -7751,8 +8183,8 @@ void addLiveToJson(JsonDocument &doc) {
     autoTarget["setpointC"] = closedLoopSetpoint(target, activeMode, stage);
     autoTarget["roomErrorC"] = isnan(roomTempC) ? 0 : roomTempC - target;
     autoTarget["stage"] = stage;
-    autoTarget["fan"] = fanForSleepDemand(demand, quietStage, activeMode == "dry");
-    autoTarget["turbo"] = turboForSleepDemand(demand, quietStage, activeMode == "dry");
+    autoTarget["fan"] = fanForSleepDemand(demand, quietStage, activeMode == "dry", curveProfile.deadband);
+    autoTarget["turbo"] = turboForSleepDemand(demand, quietStage, activeMode == "dry", curveProfile.deadband);
     autoTarget["quiet"] = quietForSleepDemand(quietStage, true);
     autoTarget["sleep"] = false;
   } else if (config.humidityControlEnabled) {
@@ -8970,37 +9402,46 @@ void handleCurvePost() {
   JsonDocument doc;
   if (!parseBody(doc)) return;
   config.autoEnabled = doc["autoEnabled"] | false;
-  config.autoMode = doc["autoMode"] | config.autoMode;
-  config.curveControlMode = doc["curveControlMode"] | config.curveControlMode;
-  config.curveEndAction = doc["curveEndAction"] | config.curveEndAction;
+  if (doc["weekendMode"].is<const char *>()) config.weekendMode = doc["weekendMode"] | config.weekendMode;
+  String profileName = doc["profile"] | "weekday";
+  bool weekendProfile = profileName == "weekend";
+  SleepCurveProfile profile = weekendProfile ? config.weekend : weekdaySleepCurveProfile();
+  profile.autoMode = doc["autoMode"] | profile.autoMode;
+  profile.curveControlMode = doc["curveControlMode"] | profile.curveControlMode;
+  profile.curveEndAction = doc["curveEndAction"] | profile.curveEndAction;
   if (doc["curveHumidityEnabled"].is<bool>()) {
-    config.curveHumidityEnabled = doc["curveHumidityEnabled"] | config.curveHumidityEnabled;
+    profile.curveHumidityEnabled = doc["curveHumidityEnabled"] | profile.curveHumidityEnabled;
   }
-  config.quietSwitchMinute = doc["quietSwitchMinute"] | config.quietSwitchMinute;
-  normalizeCurveControlConfig();
-  config.sleepStartMinute = (doc["sleepStartMinute"] | config.sleepStartMinute) % 1440;
-  config.sleepDurationMinute = doc["sleepDurationMinute"] | config.sleepDurationMinute;
-  uint16_t requestedInterval = doc["controlIntervalSec"] | config.controlIntervalSec;
-  config.controlIntervalSec = requestedInterval < 5 ? 5 : requestedInterval;
-  config.deadband = doc["deadband"] | config.deadband;
-  config.autoSendDelta = clampFloat(doc["autoSendDelta"] | config.autoSendDelta, 0.0f, 10.0f);
+  profile.quietSwitchMinute = doc["quietSwitchMinute"] | profile.quietSwitchMinute;
+  profile.sleepStartMinute = (doc["sleepStartMinute"] | profile.sleepStartMinute) % 1440;
+  profile.sleepDurationMinute = doc["sleepDurationMinute"] | profile.sleepDurationMinute;
+  profile.controlIntervalSec = doc["controlIntervalSec"] | profile.controlIntervalSec;
+  profile.deadband = doc["deadband"] | profile.deadband;
+  profile.autoSendDelta = clampFloat(doc["autoSendDelta"] | profile.autoSendDelta, 0.0f, 10.0f);
   config.minSetpoint = 16.0f;
   config.maxSetpoint = 32.0f;
   JsonArray curve = doc["curve"].as<JsonArray>();
   if (!curve.isNull()) {
-    config.curveCount = 0;
+    profile.curveCount = 0;
     for (JsonObject point : curve) {
-      if (config.curveCount >= kMaxCurvePoints) break;
-      config.curve[config.curveCount].minute = point["minute"] | 0;
-      config.curve[config.curveCount].temp =
+      if (profile.curveCount >= kMaxCurvePoints) break;
+      profile.curve[profile.curveCount].minute = point["minute"] | 0;
+      profile.curve[profile.curveCount].temp =
           clampFloat(point["temp"] | 26.0f, config.minSetpoint, config.maxSetpoint);
-      config.curveCount++;
+      profile.curveCount++;
     }
-    if (config.curveCount == 0) {
-      config.curve[0] = {0, 26.0f};
-      config.curveCount = 1;
+    if (profile.curveCount == 0) {
+      profile.curve[0] = {0, 26.0f};
+      profile.curveCount = 1;
     }
   }
+  normalizeSleepCurveProfile(profile);
+  if (weekendProfile) {
+    config.weekend = profile;
+  } else {
+    applySleepCurveProfileToWeekday(profile);
+  }
+  normalizeCurveControlConfig();
   saveConfig();
   sendOk("curve saved");
 }
@@ -9010,6 +9451,7 @@ void applyConfigJson(JsonObject src) {
   if (src["acProtocol"].is<const char *>()) config.acProtocol = strToDecodeType((src["acProtocol"] | "UNKNOWN"));
   if (src["acModel"].is<int>()) config.acModel = src["acModel"] | config.acModel;
   if (src["autoEnabled"].is<bool>()) config.autoEnabled = src["autoEnabled"] | config.autoEnabled;
+  if (src["weekendMode"].is<const char *>()) config.weekendMode = src["weekendMode"] | config.weekendMode;
   if (src["autoMode"].is<const char *>()) config.autoMode = src["autoMode"] | config.autoMode;
   if (src["remotePower"].is<bool>()) config.remotePower = src["remotePower"] | config.remotePower;
   if (src["remoteMode"].is<const char *>()) config.remoteMode = src["remoteMode"] | config.remoteMode;
@@ -9072,6 +9514,8 @@ void applyConfigJson(JsonObject src) {
       config.curveCount = 1;
     }
   }
+  JsonObject weekend = src["weekend"].as<JsonObject>();
+  if (!weekend.isNull()) readSleepCurveProfileFromJson(config.weekend, weekend);
   JsonArray profiles = src["acProfiles"].as<JsonArray>();
   if (!profiles.isNull()) {
     acProfileCount = 0;
