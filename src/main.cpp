@@ -315,6 +315,9 @@ IRac ac(kIrTxPin);
 PendingAction pendingAction = PendingAction::None;
 AcRequest pendingAc;
 uint8_t pendingLearnedId = 0;
+uint8_t pendingAcRepeatCount = 1;
+constexpr uint8_t kCurveEndPoweroffRepeatCount = 3;
+constexpr uint16_t kCurveEndPoweroffRepeatDelayMs = 850;
 bool irBusy = false;
 String lastActionResult = "boot";
 float lastSentSetpoint = NAN;
@@ -6432,6 +6435,7 @@ void setPendingAcContext(const char *source, const char *action, float target = 
   copyText(pendingAcAction, sizeof(pendingAcAction), action);
   pendingAcTarget = target;
   pendingAcSetpoint = setpoint;
+  pendingAcRepeatCount = 1;
 }
 
 void resetPendingAcContext() {
@@ -7624,12 +7628,22 @@ void maintainPresetSchedules() {
 void handlePendingIr() {
   if (pendingAction == PendingAction::None) return;
   PendingAction action = pendingAction;
+  uint8_t repeatCount = pendingAcRepeatCount;
   pendingAction = PendingAction::None;
   if (action == PendingAction::SendAc) {
-    sendAcNow(pendingAc, pendingAcSource, pendingAcAction, pendingAcTarget, pendingAcSetpoint);
+    repeatCount = repeatCount < 1 ? 1 : repeatCount;
+    repeatCount = repeatCount > 5 ? 5 : repeatCount;
+    for (uint8_t i = 0; i < repeatCount; i++) {
+      sendAcNow(pendingAc, pendingAcSource, pendingAcAction, pendingAcTarget, pendingAcSetpoint);
+      if (i + 1 < repeatCount) {
+        delay(kCurveEndPoweroffRepeatDelayMs);
+        yield();
+      }
+    }
     resetPendingAcContext();
   } else if (action == PendingAction::SendLearned) {
     sendLearnedNow(pendingLearnedId);
+    pendingAcRepeatCount = 1;
   }
 }
 
@@ -7932,8 +7946,9 @@ void runAutoControl() {
       pendingAc.filter = false;
       pendingAc.degrees = isnan(lastSentSetpoint) ? 26.0f : lastSentSetpoint;
       setPendingAcContext("auto", "end_poweroff", NAN, pendingAc.degrees);
+      pendingAcRepeatCount = kCurveEndPoweroffRepeatCount;
       pendingAction = PendingAction::SendAc;
-      addDecisionLog("end_poweroff", "end", "曲线结束，按设置关机", roomTempC, NAN, pendingAc.degrees);
+      addDecisionLog("end_poweroff", "end", "曲线结束，按设置关机，将连续发送 3 次", roomTempC, NAN, pendingAc.degrees);
       resetAutoSendMemory();
       lastControlMs = millis();
       sleepCurveWasActive = false;
